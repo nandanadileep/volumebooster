@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Volume Boost</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <header class="header">
+        <h1>Volume Boost</h1>
+        <p>Boost the active tab's audio.</p>
+      </header>
+
+      <section class="control">
+        <label for="boost">Boost</label>
+        <div class="row">
+          <input
+            id="boost"
+            type="range"
+            min="0.5"
+            max="3"
+            step="0.1"
+            value="1"
+          />
+          <span id="boost-value">1x</span>
+        </div>
+        <div class="actions">
+          <button id="reset" type="button">Reset</button>
+          <span id="status" aria-live="polite"></span>
+        </div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
