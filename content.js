@@ -614,11 +614,11 @@
             transform 0.1s ease;
         }
         .btn.is-active {
-          border-color: #4a72ff;
-          color: #e9f5ff;
+          border-color: #3a4052;
+          color: #c9d3de;
           background: #14141c;
-          box-shadow: 0 0 10px rgba(86, 205, 255, 0.55),
-            0 0 18px rgba(132, 96, 255, 0.5),
+          box-shadow: 0 0 6px rgba(120, 190, 255, 0.35),
+            0 0 10px rgba(140, 110, 255, 0.25),
             inset 0 1px 2px rgba(255, 255, 255, 0.18);
         }
         .btn:active {
