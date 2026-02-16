@@ -8,6 +8,10 @@ const sliderWrap = document.getElementById("boost-slider");
 const panel = document.querySelector(".panel");
 let muted = false;
 let clarityEnabled = false;
+let dragging = false;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+const DEFAULT_POS = { x: 8, y: 8 };
 
 function updateSliderUI(value) {
   const numeric = Number(value);
@@ -74,6 +78,37 @@ async function loadDefaults() {
   updateMuteUI(Boolean(data.muted));
 }
 
+function clampPosition(x, y) {
+  if (!panel) return { x, y };
+  const maxX = Math.max(0, window.innerWidth - panel.offsetWidth);
+  const maxY = Math.max(0, window.innerHeight - panel.offsetHeight);
+  return {
+    x: Math.min(Math.max(0, x), maxX),
+    y: Math.min(Math.max(0, y), maxY),
+  };
+}
+
+function applyPanelPosition(x, y) {
+  if (!panel) return;
+  const pos = clampPosition(x, y);
+  panel.style.left = `${pos.x}px`;
+  panel.style.top = `${pos.y}px`;
+}
+
+async function loadPanelPosition() {
+  if (!panel) return;
+  const data = await chrome.storage.local.get({ popupPos: DEFAULT_POS });
+  const pos = data.popupPos || DEFAULT_POS;
+  applyPanelPosition(pos.x, pos.y);
+}
+
+async function savePanelPosition() {
+  if (!panel) return;
+  const x = parseInt(panel.style.left || DEFAULT_POS.x, 10);
+  const y = parseInt(panel.style.top || DEFAULT_POS.y, 10);
+  await chrome.storage.local.set({ popupPos: { x, y } });
+}
+
 async function loadState() {
   const state = await sendToActiveTab({ type: "GET_STATE" });
   if (state && state.ok) {
@@ -137,6 +172,34 @@ slider.addEventListener("change", (e) => {
   applyBoost(e.target.value);
 });
 
+panel?.addEventListener("pointerdown", (e) => {
+  if (e.target.closest("input, button")) return;
+  dragging = true;
+  const rect = panel.getBoundingClientRect();
+  dragOffsetX = e.clientX - rect.left;
+  dragOffsetY = e.clientY - rect.top;
+  panel.setPointerCapture(e.pointerId);
+});
+
+panel?.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  applyPanelPosition(e.clientX - dragOffsetX, e.clientY - dragOffsetY);
+});
+
+panel?.addEventListener("pointerup", (e) => {
+  if (!dragging) return;
+  dragging = false;
+  panel.releasePointerCapture(e.pointerId);
+  savePanelPosition();
+});
+
+panel?.addEventListener("pointercancel", (e) => {
+  if (!dragging) return;
+  dragging = false;
+  panel.releasePointerCapture(e.pointerId);
+  savePanelPosition();
+});
+
 clarityToggle.addEventListener("click", () => {
   applyClarity(!clarityEnabled);
 });
@@ -152,4 +215,5 @@ muteBtn.addEventListener("click", () => {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadState();
+  loadPanelPosition();
 });
