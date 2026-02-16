@@ -3,7 +3,6 @@ const COMMANDS = {
   TOGGLE_MUTE: "toggle_mute",
   BOOST_UP: "boost_up",
   BOOST_DOWN: "boost_down",
-  RESET_BOOST: "reset_boost",
 };
 
 function withActiveTab(cb) {
@@ -28,9 +27,6 @@ chrome.commands.onCommand.addListener((command) => {
         break;
       case COMMANDS.BOOST_DOWN:
         chrome.tabs.sendMessage(tabId, { type: "ADJUST_BOOST", delta: -0.1 });
-        break;
-      case COMMANDS.RESET_BOOST:
-        chrome.tabs.sendMessage(tabId, { type: "RESET_BOOST" });
         break;
       default:
         break;

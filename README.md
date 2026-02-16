@@ -55,7 +55,6 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 - Toggle Mute: `Ctrl+Shift+M`
 - Boost Up: `Ctrl+Shift+Up`
 - Boost Down: `Ctrl+Shift+Down`
-- Reset Boost: `Ctrl+Shift+0`
 
 ## Challenges & Mitigations
 **1) ML in MV3 (no remote code)**
