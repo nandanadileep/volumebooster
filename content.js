@@ -45,6 +45,7 @@
   let overlayDragging = false;
   let overlayPendingDrag = false;
   let overlayDragFromInput = false;
+  let resetFlashTimer = null;
   let overlayDragStart = { x: 0, y: 0 };
   let overlayDragOffset = { x: 0, y: 0 };
   const OVERLAY_POS_KEY = "overlayPos";
@@ -599,9 +600,9 @@
           width: 20px;
           height: 20px;
           border-radius: 999px;
-          border: 1px solid #2f3345;
+          border: 1px solid #2b2f3b;
           background: #0f0f16;
-          color: #9aa0ad;
+          color: #7f8794;
           display: grid;
           place-items: center;
           font-size: 10px;
@@ -609,10 +610,19 @@
           padding: 0;
           box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.12),
             0 6px 10px rgba(0, 0, 0, 0.45);
+          transition: color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease,
+            transform 0.1s ease;
         }
         .btn.is-active {
-          border-color: #3b3f55;
+          border-color: #4a72ff;
+          color: #e9f5ff;
           background: #14141c;
+          box-shadow: 0 0 10px rgba(86, 205, 255, 0.55),
+            0 0 18px rgba(132, 96, 255, 0.5),
+            inset 0 1px 2px rgba(255, 255, 255, 0.18);
+        }
+        .btn:active {
+          transform: scale(0.96);
         }
         .status {
           display: none;
@@ -709,6 +719,7 @@
     overlay.clarity.addEventListener("click", () => {
       clarityEnabled = !clarityEnabled;
       chrome.storage.local.set({ clarity: clarityEnabled });
+      setRnnoiseEnabled(clarityEnabled);
       connectGraph();
       updateOverlayControls();
     });
@@ -719,6 +730,12 @@
       applyGain();
       chrome.storage.local.set({ boost: boostValue });
       updateOverlayControls();
+      overlay.reset.classList.add("is-active");
+      if (resetFlashTimer) clearTimeout(resetFlashTimer);
+      resetFlashTimer = setTimeout(() => {
+        overlay.reset.classList.remove("is-active");
+        resetFlashTimer = null;
+      }, 300);
     });
 
     overlay.mute.addEventListener("click", () => {
