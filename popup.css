@@ -68,6 +68,11 @@ body {
     0 6px 10px rgba(0, 0, 0, 0.45);
 }
 
+.icon-button.is-active {
+  border-color: #3b3f55;
+  background: #14141c;
+}
+
 .icon-button:hover {
   border-color: #3b3f55;
   box-shadow: 0 0 8px rgba(40, 240, 255, 0.3),

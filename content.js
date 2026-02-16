@@ -8,6 +8,7 @@
   let limiter = null;
   let clarityEnabled = false;
   let boostValue = 1.0;
+  let muted = false;
   const sources = new Map();
 
   function disconnectSafely(node) {
@@ -44,7 +45,7 @@
     if (!audioCtx) {
       audioCtx = new AudioContext({ latencyHint: "interactive" });
       gainNode = audioCtx.createGain();
-      gainNode.gain.value = boostValue;
+      gainNode.gain.value = muted ? 0 : boostValue;
 
       highpass = audioCtx.createBiquadFilter();
       highpass.type = "highpass";
@@ -78,6 +79,11 @@
 
       connectGraph();
     }
+  }
+
+  function applyGain() {
+    if (!gainNode) return;
+    gainNode.gain.value = muted ? 0 : boostValue;
   }
 
   function hookMedia(el) {
@@ -127,7 +133,17 @@
     if (msg.type === "SET_BOOST") {
       ensureAudioGraph();
       boostValue = Number(msg.value) || 1.0;
-      gainNode.gain.value = boostValue;
+      applyGain();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      sendResponse({ ok: true });
+    }
+
+    if (msg.type === "SET_MUTE") {
+      ensureAudioGraph();
+      muted = Boolean(msg.muted);
+      applyGain();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
@@ -139,6 +155,7 @@
         ok: true,
         boost: boostValue,
         clarity: clarityEnabled,
+        muted,
         hooked: sources.size > 0,
       });
     }
@@ -150,11 +167,12 @@
     scan();
   }
 
-  chrome.storage.local.get({ boost: 1.0, clarity: false }, (data) => {
+  chrome.storage.local.get({ boost: 1.0, clarity: false, muted: false }, (data) => {
     boostValue = Number(data.boost) || 1.0;
     clarityEnabled = Boolean(data.clarity);
+    muted = Boolean(data.muted);
     ensureAudioGraph();
-    gainNode.gain.value = boostValue;
+    applyGain();
     connectGraph();
   });
 })();

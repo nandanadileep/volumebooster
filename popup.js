@@ -6,6 +6,7 @@ const resetBtn = document.getElementById("reset");
 const muteBtn = document.getElementById("mute");
 const sliderWrap = document.getElementById("boost-slider");
 const panel = document.querySelector(".panel");
+let muted = false;
 
 function updateSliderUI(value) {
   const numeric = Number(value);
@@ -26,6 +27,14 @@ function setStatus(message) {
   status.textContent = message || "";
   if (!panel) return;
   panel.dataset.status = message === "Applied" ? "applied" : "error";
+}
+
+function updateMuteUI(isMuted) {
+  muted = isMuted;
+  if (!muteBtn) return;
+  muteBtn.textContent = muted ? "🔇" : "🔊";
+  muteBtn.classList.toggle("is-active", muted);
+  muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
 }
 
 async function getActiveTab() {
@@ -50,10 +59,11 @@ async function sendToActiveTab(payload) {
 }
 
 async function loadDefaults() {
-  const data = await chrome.storage.local.get({ boost: 1.0, clarity: false });
+  const data = await chrome.storage.local.get({ boost: 1.0, clarity: false, muted: false });
   slider.value = String(data.boost);
   updateLabel(data.boost);
   clarityToggle.checked = Boolean(data.clarity);
+  updateMuteUI(Boolean(data.muted));
 }
 
 async function loadState() {
@@ -62,6 +72,7 @@ async function loadState() {
     slider.value = String(state.boost ?? 1.0);
     updateLabel(slider.value);
     clarityToggle.checked = Boolean(state.clarity);
+    updateMuteUI(Boolean(state.muted));
     setStatus(state.hooked ? "Applied" : "Not hooked");
     return;
   }
@@ -79,6 +90,13 @@ async function applyBoost(value) {
 async function applyClarity(enabled) {
   await chrome.storage.local.set({ clarity: Boolean(enabled) });
   const result = await sendToActiveTab({ type: "SET_CLARITY", enabled });
+  if (result.ok) setStatus("Applied");
+}
+
+async function applyMute(nextMuted) {
+  updateMuteUI(nextMuted);
+  await chrome.storage.local.set({ muted: Boolean(nextMuted) });
+  const result = await sendToActiveTab({ type: "SET_MUTE", muted: Boolean(nextMuted) });
   if (result.ok) setStatus("Applied");
 }
 
@@ -112,7 +130,7 @@ resetBtn.addEventListener("click", () => {
 });
 
 muteBtn.addEventListener("click", () => {
-  setStatus("Mute not implemented");
+  applyMute(!muted);
 });
 
 document.addEventListener("DOMContentLoaded", () => {
