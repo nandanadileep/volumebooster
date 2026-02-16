@@ -325,18 +325,48 @@
           color: #d6e9ff;
           user-select: none;
         }
+        .panel {
+          background: #0b0b10;
+          border: 1px solid rgba(47, 51, 69, 0.7);
+          border-radius: 22px;
+          padding: 10px 12px;
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.65),
+            inset 0 2px 8px rgba(0, 0, 0, 0.7);
+          transition: border-color 0.2s ease;
+        }
+        .panel.applied {
+          border-color: rgba(0, 255, 140, 0.6);
+        }
+        .panel.error {
+          border-color: rgba(255, 82, 82, 0.65);
+        }
         .bar {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 6px 10px;
-          background: transparent;
+        }
+        .drag-handle {
+          width: 10px;
+          height: 18px;
+          border-radius: 8px;
+          border: 1px solid rgba(47, 51, 69, 0.8);
+          background: radial-gradient(circle at 30% 30%, #1b1f2a, #0b0b12);
+          box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.12);
+          display: grid;
+          place-items: center;
+          color: #6f7688;
+          font-size: 12px;
+          cursor: grab;
+        }
+        .drag-handle:active {
+          cursor: grabbing;
         }
         .slider {
           --percent: 0%;
           position: relative;
-          width: 520px;
+          width: 320px;
           height: 10px;
+          padding: 0 14px;
         }
         .track {
           position: absolute;
@@ -359,11 +389,36 @@
           top: 0;
           bottom: 0;
           width: var(--percent);
-          background: linear-gradient(90deg, #28f0ff 0%, #7c58ff 100%);
+          background: linear-gradient(
+            90deg,
+            rgba(40, 240, 255, 0.35) 0%,
+            #28f0ff 35%,
+            #7c58ff 70%,
+            rgba(124, 88, 255, 0.35) 100%
+          );
+          background-size: 200% 100%;
+          animation: flowGlow 3s linear infinite;
           box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
             0 0 18px rgba(124, 88, 255, 0.45);
           border-radius: inherit;
           transition: box-shadow 0.2s ease;
+        }
+        .fill::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: -35%;
+          width: 35%;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.6),
+            transparent
+          );
+          animation: flowStreak 2.6s linear infinite;
+          opacity: 0.6;
+          pointer-events: none;
         }
         .thumb {
           position: absolute;
@@ -422,9 +477,7 @@
           background: #14141c;
         }
         .status {
-          margin-top: 2px;
-          font-size: 11px;
-          color: #9aa0ad;
+          display: none;
         }
         .slider:hover .fill {
           animation: glowPulse 1.4s ease-in-out infinite;
@@ -446,26 +499,47 @@
               0 0 18px rgba(124, 88, 255, 0.45);
           }
         }
+        @keyframes flowGlow {
+          0% {
+            background-position: 0% 50%;
+          }
+          100% {
+            background-position: 200% 50%;
+          }
+        }
+        @keyframes flowStreak {
+          0% {
+            transform: translateX(-120%);
+          }
+          100% {
+            transform: translateX(320%);
+          }
+        }
       </style>
-      <div class="bar">
-        <div class="slider" id="vb-slider" style="--percent: 0%;">
-          <div class="track"><div class="fill"></div></div>
-          <div class="thumb"></div>
-          <input id="vb-range" type="range" min="0.5" max="3" step="0.1" value="1" />
+      <div class="panel error" id="vb-panel">
+        <div class="bar">
+          <div class="drag-handle" id="vb-drag" title="Drag">::</div>
+          <div class="slider" id="vb-slider" style="--percent: 0%;">
+            <div class="track"><div class="fill"></div></div>
+            <div class="thumb"></div>
+            <input id="vb-range" type="range" min="0.5" max="3" step="0.1" value="1" />
+          </div>
+          <span class="value" id="vb-value">1.0x</span>
+          <div class="actions">
+            <button class="btn" id="vb-clarity" title="Speech Focused">🗣️</button>
+            <button class="btn" id="vb-reset" title="Reset">🔄</button>
+            <button class="btn" id="vb-mute" title="Mute">🔇</button>
+          </div>
         </div>
-        <span class="value" id="vb-value">1.0x</span>
-        <div class="actions">
-          <button class="btn" id="vb-clarity" title="Speech Focused">🗣️</button>
-          <button class="btn" id="vb-reset" title="Reset">🔄</button>
-          <button class="btn" id="vb-mute" title="Mute">🔇</button>
-        </div>
+        <div class="status" id="vb-status"></div>
       </div>
-      <div class="status" id="vb-status"></div>
     `;
 
     document.documentElement.appendChild(host);
     overlay = {
       host,
+      panel: shadow.getElementById("vb-panel"),
+      dragHandle: shadow.getElementById("vb-drag"),
       sliderWrap: shadow.getElementById("vb-slider"),
       range: shadow.getElementById("vb-range"),
       value: shadow.getElementById("vb-value"),
@@ -516,55 +590,43 @@
       updateOverlayControls();
     });
 
-    host.addEventListener("pointerdown", (e) => {
-      if (isButtonTarget(e)) return;
+    overlay.dragHandle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
       overlayPendingDrag = true;
       overlayDragging = false;
-      overlayDragFromInput = isInputTarget(e);
+      overlayDragFromInput = false;
       overlayDragStart = { x: e.clientX, y: e.clientY };
       const rect = host.getBoundingClientRect();
       overlayDragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      host.setPointerCapture(e.pointerId);
+      overlay.dragHandle.setPointerCapture(e.pointerId);
     });
 
-    host.addEventListener("pointermove", (e) => {
+    overlay.dragHandle.addEventListener("pointermove", (e) => {
       if (!overlayPendingDrag && !overlayDragging) return;
       const dx = e.clientX - overlayDragStart.x;
       const dy = e.clientY - overlayDragStart.y;
       if (overlayPendingDrag) {
-        if (overlayDragFromInput && Math.abs(dx) < 6 && Math.abs(dy) < 6) {
-          return;
-        }
         overlayDragging = true;
         overlayPendingDrag = false;
-        if (overlayDragFromInput && overlay.range) {
-          overlay.range.style.pointerEvents = "none";
-        }
       }
       const x = e.clientX - overlayDragOffset.x;
       const y = e.clientY - overlayDragOffset.y;
       applyOverlayPosition(x, y);
     });
 
-    host.addEventListener("pointerup", (e) => {
+    overlay.dragHandle.addEventListener("pointerup", (e) => {
       if (!overlayDragging && !overlayPendingDrag) return;
       overlayDragging = false;
       overlayPendingDrag = false;
-      if (overlay.range) {
-        overlay.range.style.pointerEvents = "";
-      }
-      host.releasePointerCapture(e.pointerId);
+      overlay.dragHandle.releasePointerCapture(e.pointerId);
       saveOverlayPosition();
     });
 
-    host.addEventListener("pointercancel", (e) => {
+    overlay.dragHandle.addEventListener("pointercancel", (e) => {
       if (!overlayDragging && !overlayPendingDrag) return;
       overlayDragging = false;
       overlayPendingDrag = false;
-      if (overlay.range) {
-        overlay.range.style.pointerEvents = "";
-      }
-      host.releasePointerCapture(e.pointerId);
+      overlay.dragHandle.releasePointerCapture(e.pointerId);
       saveOverlayPosition();
     });
 
@@ -584,12 +646,6 @@
       );
   }
 
-  function isInputTarget(event) {
-    return event
-      .composedPath()
-      .some((el) => el && el.tagName && el.tagName === "INPUT");
-  }
-
   function updateOverlayControls() {
     if (!overlay) return;
     const min = Number(overlay.range.min) || 0;
@@ -606,14 +662,26 @@
   function updateOverlayStatus() {
     if (!overlay) return;
     if (blocked && sources.size === 0) {
-      overlay.status.textContent = "Blocked";
+      overlay.status.textContent = "";
+      overlay.panel?.classList.add("error");
+      overlay.panel?.classList.remove("applied");
       return;
     }
     if (audioCtx && audioCtx.state === "suspended") {
-      overlay.status.textContent = "Click page to enable audio";
+      overlay.status.textContent = "";
+      overlay.panel?.classList.add("error");
+      overlay.panel?.classList.remove("applied");
       return;
     }
-    overlay.status.textContent = sources.size > 0 ? "Applied" : "Not hooked";
+    if (sources.size > 0) {
+      overlay.status.textContent = "";
+      overlay.panel?.classList.add("applied");
+      overlay.panel?.classList.remove("error");
+    } else {
+      overlay.status.textContent = "";
+      overlay.panel?.classList.add("error");
+      overlay.panel?.classList.remove("applied");
+    }
   }
 
   function clampOverlayPosition(x, y) {
