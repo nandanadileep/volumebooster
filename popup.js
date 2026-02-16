@@ -123,8 +123,7 @@ async function loadState() {
     } else if (!state.hooked) {
       setStatus("Not hooked", "error");
     } else {
-      const sources = state.sources ? ` • ${state.sources} source${state.sources === 1 ? "" : "s"}` : "";
-      setStatus(`Applied${sources}`, "applied");
+      setStatus("Applied", "applied");
     }
     return;
   }

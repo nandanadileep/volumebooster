@@ -25,6 +25,11 @@
   let blocked = false;
   let lastHookError = "";
   const sources = new Map();
+  let overlay = null;
+  let overlayDragging = false;
+  let overlayDragOffset = { x: 0, y: 0 };
+  const OVERLAY_POS_KEY = "overlayPos";
+  const OVERLAY_DEFAULT_POS = { x: 24, y: 24 };
 
   function disconnectSafely(node) {
     try {
@@ -150,10 +155,12 @@
       sources.set(el, source);
       blocked = false;
       lastHookError = "";
+      updateOverlayStatus();
     } catch (err) {
       if (sources.size === 0) {
         blocked = true;
         lastHookError = String(err && err.name ? err.name : err);
+        updateOverlayStatus();
       }
     }
   }
@@ -167,6 +174,7 @@
       // Ignore disconnect errors.
     }
     sources.delete(el);
+    updateOverlayStatus();
   }
 
   function collectMedia(node, collection) {
@@ -215,6 +223,7 @@
       ensureAudioGraph();
       clarityEnabled = Boolean(msg.enabled);
       connectGraph();
+      updateOverlayControls();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
@@ -225,6 +234,7 @@
       ensureAudioGraph();
       boostValue = Number(msg.value) || 1.0;
       applyGain();
+      updateOverlayControls();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
@@ -235,6 +245,7 @@
       ensureAudioGraph();
       muted = Boolean(msg.muted);
       applyGain();
+      updateOverlayControls();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
@@ -258,7 +269,7 @@
 
   function resumeAudio() {
     if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume().catch(() => {});
+      audioCtx.resume().then(updateOverlayStatus).catch(() => {});
     }
   }
 
@@ -278,5 +289,328 @@
     ensureAudioGraph();
     applyGain();
     connectGraph();
+    initOverlayWhenReady();
   });
+
+  function initOverlayWhenReady() {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initOverlay, { once: true });
+    } else {
+      initOverlay();
+    }
+  }
+
+  function initOverlay() {
+    if (window.top !== window) return;
+    if (overlay || document.getElementById("vb-overlay-host")) return;
+    const host = document.createElement("div");
+    host.id = "vb-overlay-host";
+    host.style.position = "fixed";
+    host.style.left = `${OVERLAY_DEFAULT_POS.x}px`;
+    host.style.top = `${OVERLAY_DEFAULT_POS.y}px`;
+    host.style.zIndex = "2147483647";
+    host.style.pointerEvents = "auto";
+
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `
+      <style>
+        :host {
+          all: initial;
+          position: fixed;
+          z-index: 2147483647;
+          font-family: "Segoe UI", sans-serif;
+          color: #d6e9ff;
+          user-select: none;
+        }
+        .bar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 10px;
+          background: transparent;
+        }
+        .slider {
+          --percent: 0%;
+          position: relative;
+          width: 520px;
+          height: 10px;
+        }
+        .track {
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          height: 4px;
+          transform: translateY(-50%);
+          border-radius: 999px;
+          background: #0a0a0f;
+          border: 1px solid #1b1b25;
+          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.85),
+            0 0 6px rgba(64, 255, 240, 0.25),
+            0 0 16px rgba(88, 108, 255, 0.22);
+          overflow: hidden;
+        }
+        .fill {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: var(--percent);
+          background: linear-gradient(90deg, #28f0ff 0%, #7c58ff 100%);
+          box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
+            0 0 18px rgba(124, 88, 255, 0.45);
+          border-radius: inherit;
+          transition: box-shadow 0.2s ease;
+        }
+        .thumb {
+          position: absolute;
+          top: 50%;
+          left: var(--percent);
+          width: 12px;
+          height: 12px;
+          transform: translate(-50%, -50%);
+          border-radius: 999px;
+          background: radial-gradient(circle at 30% 30%, #2a2f3f, #0b0b12);
+          border: 1px solid #2f3345;
+          box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.18),
+            0 4px 10px rgba(0, 0, 0, 0.55);
+          pointer-events: none;
+        }
+        input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          margin: 0;
+          opacity: 0;
+          cursor: pointer;
+        }
+        .value {
+          min-width: 40px;
+          text-align: right;
+          font-size: 12px;
+          color: #9aa0ad;
+        }
+        .actions {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-left: 6px;
+        }
+        .btn {
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          border: 1px solid #2f3345;
+          background: #0f0f16;
+          color: #9aa0ad;
+          display: grid;
+          place-items: center;
+          font-size: 10px;
+          cursor: pointer;
+          padding: 0;
+          box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.12),
+            0 6px 10px rgba(0, 0, 0, 0.45);
+        }
+        .btn.is-active {
+          border-color: #3b3f55;
+          background: #14141c;
+        }
+        .status {
+          margin-top: 2px;
+          font-size: 11px;
+          color: #9aa0ad;
+        }
+        .slider:hover .fill {
+          animation: glowPulse 1.4s ease-in-out infinite;
+        }
+        .slider.dragging .fill {
+          animation: glowPulse 0.8s ease-in-out infinite;
+        }
+        @keyframes glowPulse {
+          0% {
+            box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
+              0 0 18px rgba(124, 88, 255, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 14px rgba(40, 240, 255, 0.85),
+              0 0 26px rgba(124, 88, 255, 0.7);
+          }
+          100% {
+            box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
+              0 0 18px rgba(124, 88, 255, 0.45);
+          }
+        }
+      </style>
+      <div class="bar">
+        <div class="slider" id="vb-slider" style="--percent: 0%;">
+          <div class="track"><div class="fill"></div></div>
+          <div class="thumb"></div>
+          <input id="vb-range" type="range" min="0.5" max="3" step="0.1" value="1" />
+        </div>
+        <span class="value" id="vb-value">1.0x</span>
+        <div class="actions">
+          <button class="btn" id="vb-clarity" title="Speech Focused">🗣️</button>
+          <button class="btn" id="vb-reset" title="Reset">🔄</button>
+          <button class="btn" id="vb-mute" title="Mute">🔇</button>
+        </div>
+      </div>
+      <div class="status" id="vb-status"></div>
+    `;
+
+    document.documentElement.appendChild(host);
+    overlay = {
+      host,
+      sliderWrap: shadow.getElementById("vb-slider"),
+      range: shadow.getElementById("vb-range"),
+      value: shadow.getElementById("vb-value"),
+      clarity: shadow.getElementById("vb-clarity"),
+      reset: shadow.getElementById("vb-reset"),
+      mute: shadow.getElementById("vb-mute"),
+      status: shadow.getElementById("vb-status"),
+    };
+
+    overlay.range.addEventListener("input", (e) => {
+      boostValue = Number(e.target.value) || 1.0;
+      applyGain();
+      updateOverlayControls();
+    });
+
+    overlay.range.addEventListener("change", () => {
+      chrome.storage.local.set({ boost: boostValue });
+      updateOverlayStatus();
+    });
+
+    overlay.range.addEventListener("pointerdown", () => {
+      overlay.sliderWrap.classList.add("dragging");
+    });
+
+    const stopDragGlow = () => overlay.sliderWrap.classList.remove("dragging");
+    overlay.range.addEventListener("pointerup", stopDragGlow);
+    overlay.range.addEventListener("pointerleave", stopDragGlow);
+
+    overlay.clarity.addEventListener("click", () => {
+      clarityEnabled = !clarityEnabled;
+      chrome.storage.local.set({ clarity: clarityEnabled });
+      connectGraph();
+      updateOverlayControls();
+    });
+
+    overlay.reset.addEventListener("click", () => {
+      boostValue = 1.0;
+      autoGain = 1.0;
+      applyGain();
+      chrome.storage.local.set({ boost: boostValue });
+      updateOverlayControls();
+    });
+
+    overlay.mute.addEventListener("click", () => {
+      muted = !muted;
+      chrome.storage.local.set({ muted });
+      applyGain();
+      updateOverlayControls();
+    });
+
+    host.addEventListener("pointerdown", (e) => {
+      if (isInteractiveTarget(e)) return;
+      overlayDragging = true;
+      const rect = host.getBoundingClientRect();
+      overlayDragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      host.setPointerCapture(e.pointerId);
+    });
+
+    host.addEventListener("pointermove", (e) => {
+      if (!overlayDragging) return;
+      const x = e.clientX - overlayDragOffset.x;
+      const y = e.clientY - overlayDragOffset.y;
+      applyOverlayPosition(x, y);
+    });
+
+    host.addEventListener("pointerup", (e) => {
+      if (!overlayDragging) return;
+      overlayDragging = false;
+      host.releasePointerCapture(e.pointerId);
+      saveOverlayPosition();
+    });
+
+    host.addEventListener("pointercancel", (e) => {
+      if (!overlayDragging) return;
+      overlayDragging = false;
+      host.releasePointerCapture(e.pointerId);
+      saveOverlayPosition();
+    });
+
+    loadOverlayPosition();
+    updateOverlayControls();
+    updateOverlayStatus();
+  }
+
+  function isInteractiveTarget(event) {
+    return event
+      .composedPath()
+      .some(
+        (el) =>
+          el &&
+          el.tagName &&
+          (el.tagName === "INPUT" || el.tagName === "BUTTON" || el.getAttribute?.("role") === "button")
+      );
+  }
+
+  function updateOverlayControls() {
+    if (!overlay) return;
+    const min = Number(overlay.range.min) || 0;
+    const max = Number(overlay.range.max) || 1;
+    const percent = ((boostValue - min) / (max - min)) * 100;
+    overlay.sliderWrap.style.setProperty("--percent", `${percent}%`);
+    overlay.range.value = String(boostValue);
+    overlay.value.textContent = `${boostValue.toFixed(1)}x`;
+    overlay.clarity.classList.toggle("is-active", clarityEnabled);
+    overlay.mute.textContent = muted ? "🔇" : "🔊";
+    overlay.mute.classList.toggle("is-active", muted);
+  }
+
+  function updateOverlayStatus() {
+    if (!overlay) return;
+    if (blocked && sources.size === 0) {
+      overlay.status.textContent = "Blocked";
+      return;
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      overlay.status.textContent = "Click page to enable audio";
+      return;
+    }
+    overlay.status.textContent = sources.size > 0 ? "Applied" : "Not hooked";
+  }
+
+  function clampOverlayPosition(x, y) {
+    const maxX = Math.max(0, window.innerWidth - overlay.host.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - overlay.host.offsetHeight);
+    return {
+      x: Math.min(Math.max(0, x), maxX),
+      y: Math.min(Math.max(0, y), maxY),
+    };
+  }
+
+  function applyOverlayPosition(x, y) {
+    if (!overlay) return;
+    const pos = clampOverlayPosition(x, y);
+    overlay.host.style.left = `${pos.x}px`;
+    overlay.host.style.top = `${pos.y}px`;
+  }
+
+  function loadOverlayPosition() {
+    chrome.storage.local.get({ [OVERLAY_POS_KEY]: OVERLAY_DEFAULT_POS }, (data) => {
+      const pos = data[OVERLAY_POS_KEY] || OVERLAY_DEFAULT_POS;
+      applyOverlayPosition(pos.x, pos.y);
+    });
+  }
+
+  function saveOverlayPosition() {
+    if (!overlay) return;
+    const x = parseInt(overlay.host.style.left || OVERLAY_DEFAULT_POS.x, 10);
+    const y = parseInt(overlay.host.style.top || OVERLAY_DEFAULT_POS.y, 10);
+    chrome.storage.local.set({ [OVERLAY_POS_KEY]: { x, y } });
+  }
 })();
