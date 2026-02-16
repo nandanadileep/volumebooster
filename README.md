@@ -50,6 +50,20 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 3. Toggle **🗣️ Speech Focus** and listen for reduced background noise + clearer voice.
 4. Adjust boost and verify limiter keeps audio clean.
 
+## How To Use
+- **Drag** the floating bar anywhere on the page.
+- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain.
+- **🔄 Reset** returns boost to 1.0x.
+- **🔇 Mute** toggles audio off/on.
+- Adjust the **slider** for per‑tab volume boost.
+
+## How To Use
+- **Drag** the floating bar anywhere on the page.
+- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain.
+- **🔄 Reset** returns boost to 1.0x.
+- **🔇 Mute** toggles audio off/on.
+- Adjust the **slider** for per‑tab volume boost.
+
 ## Keyboard Shortcuts (Default)
 - Toggle Speech Focus: `Ctrl+Shift+S`
 - Toggle Mute: `Ctrl+Shift+M`
