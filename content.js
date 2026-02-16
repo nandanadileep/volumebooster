@@ -23,8 +23,9 @@
     attackSec: 0.3,
     releaseSec: 0.6,
     maxStep: 0.08,
-    silenceDb: -55,
-    silenceHoldMs: 300,
+    silenceDb: -52,
+    silenceHoldMs: 400,
+    silenceResumeMs: 150,
     maxUpDbPerUpdate: 0.2,
     maxDownDbPerUpdate: 0.4,
   };
@@ -148,7 +149,9 @@
 
   function startAutoGainLoop() {
     if (autoGainTimer) return;
-    let silenceMs = 0;
+    let belowGateMs = 0;
+    let aboveGateMs = 0;
+    let allowIncrease = true;
     autoGainTimer = setInterval(() => {
       if (!autoGainConfig.enabled || !analyser || !meterBuffer) return;
       analyser.getFloatTimeDomainData(meterBuffer);
@@ -162,9 +165,17 @@
       const rmsDb = 20 * Math.log10(rms + 1e-12);
 
       if (rmsDb < autoGainConfig.silenceDb) {
-        silenceMs += autoGainConfig.hopMs;
+        belowGateMs += autoGainConfig.hopMs;
+        aboveGateMs = 0;
       } else {
-        silenceMs = 0;
+        aboveGateMs += autoGainConfig.hopMs;
+        belowGateMs = 0;
+      }
+
+      if (belowGateMs >= autoGainConfig.silenceHoldMs) {
+        allowIncrease = false;
+      } else if (!allowIncrease && aboveGateMs >= autoGainConfig.silenceResumeMs) {
+        allowIncrease = true;
       }
 
       const desiredLinear = Math.pow(10, (autoGainConfig.targetDb - rmsDb) / 20);
@@ -177,7 +188,7 @@
       const coeff = 1 - Math.exp(-(autoGainConfig.hopMs / 1000) / tau);
       let deltaDb = diffDb * coeff;
 
-      if (silenceMs >= autoGainConfig.silenceHoldMs && deltaDb > 0) {
+      if (!allowIncrease && deltaDb > 0) {
         deltaDb = 0;
       }
 

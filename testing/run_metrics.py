@@ -133,8 +133,9 @@ def apply_auto_gain(processed, sr, target_db=-18.0):
     max_gain = 2.4
     attack = 0.3
     release = 0.6
-    silence_db = -55
-    silence_hold_ms = 300
+    silence_db = -52
+    silence_hold_ms = 400
+    silence_resume_ms = 150
     max_up_db = 0.2
     max_down_db = 0.4
 
@@ -142,7 +143,9 @@ def apply_auto_gain(processed, sr, target_db=-18.0):
     gains = np.ones_like(processed, dtype=np.float32)
 
     auto_gain = 1.0
-    silence_ms = 0
+    below_gate_ms = 0.0
+    above_gate_ms = 0.0
+    allow_increase = True
     for start in range(0, len(processed), hop):
         end = min(len(processed), start + window)
         segment = filtered[start:end]
@@ -151,10 +154,18 @@ def apply_auto_gain(processed, sr, target_db=-18.0):
         rms = math.sqrt(float(np.mean(segment ** 2)) + 1e-12)
         rms_db = 20 * math.log10(rms + 1e-12)
 
+        hop_ms = (hop / sr) * 1000
         if rms_db < silence_db:
-            silence_ms += (hop / sr) * 1000
+            below_gate_ms += hop_ms
+            above_gate_ms = 0.0
         else:
-            silence_ms = 0
+            above_gate_ms += hop_ms
+            below_gate_ms = 0.0
+
+        if below_gate_ms >= silence_hold_ms:
+            allow_increase = False
+        elif not allow_increase and above_gate_ms >= silence_resume_ms:
+            allow_increase = True
 
         desired_linear = math.pow(10, (target_db - rms_db) / 20)
         desired = max(min_gain, min(max_gain, desired_linear))
@@ -164,7 +175,7 @@ def apply_auto_gain(processed, sr, target_db=-18.0):
         tau = attack if diff_db > 0 else release
         coeff = 1 - math.exp(-(hop / sr) / tau)
         delta_db = diff_db * coeff
-        if silence_ms >= silence_hold_ms and delta_db > 0:
+        if not allow_increase and delta_db > 0:
             delta_db = 0
         delta_db = max(-max_down_db, min(max_up_db, delta_db))
         next_db = current_db + delta_db
