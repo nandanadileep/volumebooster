@@ -152,12 +152,11 @@
       mudCut.connect(presence);
       presence.connect(compressor);
       compressor.connect(limiter);
-      limiter.connect(audioCtx.destination);
-      limiter.connect(measureHighpass);
     } else {
-      gainNode.connect(audioCtx.destination);
-      gainNode.connect(measureHighpass);
+      gainNode.connect(limiter);
     }
+    limiter.connect(audioCtx.destination);
+    limiter.connect(measureHighpass);
     measureHighpass.connect(measureLowpass);
     measureLowpass.connect(analyser);
   }
@@ -423,7 +422,7 @@
     scan();
   }
 
-  chrome.storage.local.get({ boost: 1.0, clarity: false, muted: false }, (data) => {
+  chrome.storage.local.get({ boost: 1.0, clarity: true, muted: false }, (data) => {
     boostValue = Number(data.boost) || 1.0;
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
@@ -661,7 +660,7 @@
           <div class="slider" id="vb-slider" style="--percent: 0%;">
             <div class="track"><div class="fill"></div></div>
             <div class="thumb"></div>
-            <input id="vb-range" type="range" min="0.5" max="3" step="0.1" value="1" />
+            <input id="vb-range" type="range" min="0.5" max="2.4" step="0.1" value="1" />
           </div>
           <span class="value" id="vb-value">1.0x</span>
           <div class="actions">
