@@ -107,6 +107,7 @@ body {
   box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
     0 0 18px rgba(124, 88, 255, 0.45);
   border-radius: inherit;
+  transition: box-shadow 0.2s ease;
 }
 
 .slider-thumb {
@@ -159,6 +160,29 @@ body {
   margin: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
+      0 0 18px rgba(124, 88, 255, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(40, 240, 255, 0.85),
+      0 0 26px rgba(124, 88, 255, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
+      0 0 18px rgba(124, 88, 255, 0.45);
+  }
+}
+
+.slider:hover .slider-fill {
+  animation: glowPulse 1.4s ease-in-out infinite;
+}
+
+.slider.dragging .slider-fill {
+  animation: glowPulse 0.8s ease-in-out infinite;
 }
 
 .status {

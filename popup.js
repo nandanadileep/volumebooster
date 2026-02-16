@@ -87,6 +87,17 @@ slider.addEventListener("input", (e) => {
   setStatus("");
 });
 
+slider.addEventListener("pointerdown", () => {
+  sliderWrap?.classList.add("dragging");
+});
+
+const stopDragging = () => {
+  sliderWrap?.classList.remove("dragging");
+};
+
+slider.addEventListener("pointerup", stopDragging);
+slider.addEventListener("pointerleave", stopDragging);
+
 slider.addEventListener("change", (e) => {
   applyBoost(e.target.value);
 });
