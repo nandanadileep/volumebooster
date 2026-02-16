@@ -4,14 +4,28 @@ const status = document.getElementById("status");
 const clarityToggle = document.getElementById("clarity");
 const resetBtn = document.getElementById("reset");
 const muteBtn = document.getElementById("mute");
+const sliderWrap = document.getElementById("boost-slider");
+const panel = document.querySelector(".panel");
+
+function updateSliderUI(value) {
+  const numeric = Number(value);
+  if (!sliderWrap) return;
+  const min = Number(slider.min) || 0;
+  const max = Number(slider.max) || 1;
+  const percent = ((numeric - min) / (max - min)) * 100;
+  sliderWrap.style.setProperty("--percent", `${percent}%`);
+}
 
 function updateLabel(value) {
   const numeric = Number(value);
   valueLabel.textContent = `${numeric.toFixed(1)}x`;
+  updateSliderUI(numeric);
 }
 
 function setStatus(message) {
   status.textContent = message || "";
+  if (!panel) return;
+  panel.dataset.status = message === "Applied" ? "applied" : "error";
 }
 
 async function getActiveTab() {
