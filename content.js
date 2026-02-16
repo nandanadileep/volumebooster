@@ -41,7 +41,7 @@
 
   function ensureAudioGraph() {
     if (!audioCtx) {
-      audioCtx = new AudioContext();
+      audioCtx = new AudioContext({ latencyHint: "interactive" });
       gainNode = audioCtx.createGain();
       gainNode.gain.value = 1.0;
 
