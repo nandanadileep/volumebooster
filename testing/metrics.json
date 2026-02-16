@@ -1,0 +1,11 @@
+{
+  "lufs": -25.7,
+  "lufs_error": -7.699999999999999,
+  "dlufs_sec_variance": 1.6117612157741739,
+  "stoi": 0.9542028496833992,
+  "clipping_percent": 0.0,
+  "latency_ms": 4.75,
+  "duration_sec": 6.9063125,
+  "processing_time_sec": 0.06248100000000001,
+  "processing_time_per_sec": 0.009046940751667407
+}
