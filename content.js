@@ -229,6 +229,36 @@
     gainNode.gain.value = finalGain;
   }
 
+  function getBoostBounds() {
+    const min = overlay?.range ? Number(overlay.range.min) : 0.5;
+    const max = overlay?.range ? Number(overlay.range.max) : 2.4;
+    return { min, max };
+  }
+
+  function setBoostValue(next) {
+    const { min, max } = getBoostBounds();
+    const clamped = Math.min(max, Math.max(min, next));
+    boostValue = Math.round(clamped * 10) / 10;
+    applyGain();
+    updateOverlayControls();
+    chrome.storage.local.set({ boost: boostValue });
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    chrome.storage.local.set({ muted });
+    applyGain();
+    updateOverlayControls();
+  }
+
+  function toggleClarity() {
+    clarityEnabled = !clarityEnabled;
+    chrome.storage.local.set({ clarity: clarityEnabled });
+    setRnnoiseEnabled(clarityEnabled);
+    connectGraph();
+    updateOverlayControls();
+  }
+
   function startAutoGainLoop() {
     if (autoGainTimer) return;
     let belowGateMs = 0;
@@ -371,10 +401,42 @@
       sendResponse({ ok: true });
     }
 
+    if (msg.type === "TOGGLE_CLARITY") {
+      ensureAudioGraph();
+      toggleClarity();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      sendResponse({ ok: true });
+    }
+
     if (msg.type === "SET_BOOST") {
       ensureAudioGraph();
       boostValue = Number(msg.value) || 1.0;
       applyGain();
+      updateOverlayControls();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      sendResponse({ ok: true });
+    }
+
+    if (msg.type === "ADJUST_BOOST") {
+      ensureAudioGraph();
+      const delta = Number(msg.delta) || 0;
+      setBoostValue(boostValue + delta);
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      sendResponse({ ok: true });
+    }
+
+    if (msg.type === "RESET_BOOST") {
+      ensureAudioGraph();
+      boostValue = 1.0;
+      autoGain = 1.0;
+      applyGain();
+      chrome.storage.local.set({ boost: boostValue });
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
@@ -387,6 +449,15 @@
       muted = Boolean(msg.muted);
       applyGain();
       updateOverlayControls();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      sendResponse({ ok: true });
+    }
+
+    if (msg.type === "TOGGLE_MUTE") {
+      ensureAudioGraph();
+      toggleMute();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
       }
@@ -698,9 +769,7 @@
     };
 
     overlay.range.addEventListener("input", (e) => {
-      boostValue = Number(e.target.value) || 1.0;
-      applyGain();
-      updateOverlayControls();
+      setBoostValue(Number(e.target.value) || 1.0);
     });
 
     overlay.range.addEventListener("change", () => {
@@ -717,11 +786,7 @@
     overlay.range.addEventListener("pointerleave", stopDragGlow);
 
     overlay.clarity.addEventListener("click", () => {
-      clarityEnabled = !clarityEnabled;
-      chrome.storage.local.set({ clarity: clarityEnabled });
-      setRnnoiseEnabled(clarityEnabled);
-      connectGraph();
-      updateOverlayControls();
+      toggleClarity();
     });
 
     overlay.reset.addEventListener("click", () => {
@@ -739,10 +804,7 @@
     });
 
     overlay.mute.addEventListener("click", () => {
-      muted = !muted;
-      chrome.storage.local.set({ muted });
-      applyGain();
-      updateOverlayControls();
+      toggleMute();
     });
 
     overlay.dragHandle.addEventListener("pointerdown", (e) => {

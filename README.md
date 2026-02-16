@@ -8,6 +8,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 - **Limiter always engaged** for safe headroom and no clipping.
 - **Draggable overlay** bar that works on any page.
 - **Mute + Reset** controls with persistent settings.
+- **Keyboard shortcuts** for quick control (customizable in `chrome://extensions/shortcuts`).
 
 ## How It Works
 **Audio graph (Speech Focus ON):**
@@ -48,6 +49,13 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 2. Open a noisy speech video (YouTube works well).
 3. Toggle **🗣️ Speech Focus** and listen for reduced background noise + clearer voice.
 4. Adjust boost and verify limiter keeps audio clean.
+
+## Keyboard Shortcuts (Default)
+- Toggle Speech Focus: `Ctrl+Shift+S`
+- Toggle Mute: `Ctrl+Shift+M`
+- Boost Up: `Ctrl+Shift+Up`
+- Boost Down: `Ctrl+Shift+Down`
+- Reset Boost: `Ctrl+Shift+0`
 
 ## Challenges & Mitigations
 **1) ML in MV3 (no remote code)**
