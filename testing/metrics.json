@@ -6,7 +6,7 @@
   "clipping_percent": 0.0,
   "latency_ms": 4.75,
   "duration_sec": 6.9063125,
-  "processing_time_sec": 0.15070362499999979,
-  "metrics_time_sec": 3.9983457089999996,
-  "processing_time_per_sec": 0.02182114189011861
+  "processing_time_sec": 0.09423475000000003,
+  "metrics_time_sec": 3.911564417,
+  "processing_time_per_sec": 0.013644727197038945
 }
