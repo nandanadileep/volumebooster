@@ -7,44 +7,7 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <main class="panel" data-status="error">
-      <section class="control">
-        <label class="sr-only" for="boost">Boost</label>
-        <div class="row boost-row">
-          <div class="slider" id="boost-slider" style="--percent: 0%;">
-            <div class="slider-track">
-              <div class="slider-fill"></div>
-            </div>
-            <div class="slider-thumb" aria-hidden="true">
-              <span class="speaker-icon"></span>
-            </div>
-            <input
-              id="boost"
-              type="range"
-              min="0.5"
-              max="3"
-              step="0.1"
-              value="1"
-            />
-          </div>
-          <span id="boost-value">1.0x</span>
-        </div>
-
-        <div class="actions">
-          <button id="clarity" class="icon-button" type="button" aria-label="Speech Focused">
-            🗣️
-          </button>
-          <button id="reset" class="icon-button" type="button" aria-label="Reset">
-            🔄
-          </button>
-          <button id="mute" class="icon-button" type="button" aria-label="Mute">
-            🔇
-          </button>
-        </div>
-
-        <div id="status" class="status" aria-live="polite"></div>
-      </section>
-    </main>
+    <div id="popup-root"></div>
     <script src="popup.js"></script>
   </body>
 </html>

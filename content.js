@@ -27,6 +27,9 @@
   const sources = new Map();
   let overlay = null;
   let overlayDragging = false;
+  let overlayPendingDrag = false;
+  let overlayDragFromInput = false;
+  let overlayDragStart = { x: 0, y: 0 };
   let overlayDragOffset = { x: 0, y: 0 };
   const OVERLAY_POS_KEY = "overlayPos";
   const OVERLAY_DEFAULT_POS = { x: 24, y: 24 };
@@ -514,30 +517,53 @@
     });
 
     host.addEventListener("pointerdown", (e) => {
-      if (isInteractiveTarget(e)) return;
-      overlayDragging = true;
+      if (isButtonTarget(e)) return;
+      overlayPendingDrag = true;
+      overlayDragging = false;
+      overlayDragFromInput = isInputTarget(e);
+      overlayDragStart = { x: e.clientX, y: e.clientY };
       const rect = host.getBoundingClientRect();
       overlayDragOffset = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       host.setPointerCapture(e.pointerId);
     });
 
     host.addEventListener("pointermove", (e) => {
-      if (!overlayDragging) return;
+      if (!overlayPendingDrag && !overlayDragging) return;
+      const dx = e.clientX - overlayDragStart.x;
+      const dy = e.clientY - overlayDragStart.y;
+      if (overlayPendingDrag) {
+        if (overlayDragFromInput && Math.abs(dx) < 6 && Math.abs(dy) < 6) {
+          return;
+        }
+        overlayDragging = true;
+        overlayPendingDrag = false;
+        if (overlayDragFromInput && overlay.range) {
+          overlay.range.style.pointerEvents = "none";
+        }
+      }
       const x = e.clientX - overlayDragOffset.x;
       const y = e.clientY - overlayDragOffset.y;
       applyOverlayPosition(x, y);
     });
 
     host.addEventListener("pointerup", (e) => {
-      if (!overlayDragging) return;
+      if (!overlayDragging && !overlayPendingDrag) return;
       overlayDragging = false;
+      overlayPendingDrag = false;
+      if (overlay.range) {
+        overlay.range.style.pointerEvents = "";
+      }
       host.releasePointerCapture(e.pointerId);
       saveOverlayPosition();
     });
 
     host.addEventListener("pointercancel", (e) => {
-      if (!overlayDragging) return;
+      if (!overlayDragging && !overlayPendingDrag) return;
       overlayDragging = false;
+      overlayPendingDrag = false;
+      if (overlay.range) {
+        overlay.range.style.pointerEvents = "";
+      }
       host.releasePointerCapture(e.pointerId);
       saveOverlayPosition();
     });
@@ -547,15 +573,21 @@
     updateOverlayStatus();
   }
 
-  function isInteractiveTarget(event) {
+  function isButtonTarget(event) {
     return event
       .composedPath()
       .some(
         (el) =>
           el &&
           el.tagName &&
-          (el.tagName === "INPUT" || el.tagName === "BUTTON" || el.getAttribute?.("role") === "button")
+          (el.tagName === "BUTTON" || el.getAttribute?.("role") === "button")
       );
+  }
+
+  function isInputTarget(event) {
+    return event
+      .composedPath()
+      .some((el) => el && el.tagName && el.tagName === "INPUT");
   }
 
   function updateOverlayControls() {
