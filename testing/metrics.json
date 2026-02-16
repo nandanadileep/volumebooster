@@ -1,11 +1,12 @@
 {
-  "lufs": -25.7,
-  "lufs_error": -7.699999999999999,
-  "dlufs_sec_variance": 1.6117612157741739,
-  "stoi": 0.9542028496833992,
+  "lufs": -17.8,
+  "lufs_error": 0.1999999999999993,
+  "dlufs_sec_variance": 1.3228371528045064,
+  "stoi": 0.9648709029650809,
   "clipping_percent": 0.0,
   "latency_ms": 4.75,
   "duration_sec": 6.9063125,
-  "processing_time_sec": 0.06248100000000001,
-  "processing_time_per_sec": 0.009046940751667407
+  "processing_time_sec": 0.10348849999999987,
+  "metrics_time_sec": 3.952393042,
+  "processing_time_per_sec": 0.014984624573533252
 }
