@@ -124,7 +124,7 @@ def bandpass_for_measurement(signal, sr):
 
 def apply_auto_gain(processed, sr, target_db=-18.0):
     # Mirror the in-extension control loop: hop 50ms, window ~300ms, slow attack/release.
-    hop = int(sr * 0.07)
+    hop = int(sr * 0.08)
     window = int(sr * 0.4)
     target_db = float(target_db)
     output_trim_db = 0.5
@@ -136,8 +136,8 @@ def apply_auto_gain(processed, sr, target_db=-18.0):
     silence_db = -52
     silence_hold_ms = 400
     silence_resume_ms = 150
-    max_up_db = 0.2
-    max_down_db = 0.4
+    max_up_db = 0.15
+    max_down_db = 0.35
 
     filtered = bandpass_for_measurement(processed, sr)
     gains = np.ones_like(processed, dtype=np.float32)

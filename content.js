@@ -19,15 +19,15 @@
     outputTrimGain: Math.pow(10, 0.5 / 20),
     min: 0.6,
     max: 2.4,
-    hopMs: 70,
+    hopMs: 80,
     attackSec: 0.3,
     releaseSec: 0.6,
     maxStep: 0.08,
     silenceDb: -52,
     silenceHoldMs: 400,
     silenceResumeMs: 150,
-    maxUpDbPerUpdate: 0.2,
-    maxDownDbPerUpdate: 0.4,
+    maxUpDbPerUpdate: 0.15,
+    maxDownDbPerUpdate: 0.35,
   };
   let clarityEnabled = false;
   let boostValue = 1.0;
@@ -115,7 +115,7 @@
       limiter.knee.value = 0;
       limiter.ratio.value = 20;
       limiter.attack.value = 0.003;
-      limiter.release.value = 0.08;
+      limiter.release.value = 0.12;
 
       analyser = audioCtx.createAnalyser();
       const desiredWindowSec = 0.4;
