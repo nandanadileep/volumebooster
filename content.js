@@ -771,6 +771,7 @@
     loadOverlayPosition();
     updateOverlayControls();
     updateOverlayStatus();
+    window.addEventListener("resize", clampOverlayToViewport);
   }
 
   function isButtonTarget(event) {
@@ -850,5 +851,12 @@
     const x = parseInt(overlay.host.style.left || OVERLAY_DEFAULT_POS.x, 10);
     const y = parseInt(overlay.host.style.top || OVERLAY_DEFAULT_POS.y, 10);
     chrome.storage.local.set({ [OVERLAY_POS_KEY]: { x, y } });
+  }
+
+  function clampOverlayToViewport() {
+    if (!overlay) return;
+    const x = parseInt(overlay.host.style.left || OVERLAY_DEFAULT_POS.x, 10);
+    const y = parseInt(overlay.host.style.top || OVERLAY_DEFAULT_POS.y, 10);
+    applyOverlayPosition(x, y);
   }
 })();
