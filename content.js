@@ -12,6 +12,10 @@
   let meterBuffer = null;
   let autoGainTimer = null;
   let autoGain = 1.0;
+  let rnnoiseNode = null;
+  let rnnoiseEnabled = false;
+  let rnnoiseLoading = null;
+  let rnnoiseReady = false;
   const autoGainConfig = {
     enabled: true,
     targetDb: -18.0,
@@ -35,6 +39,8 @@
   let blocked = false;
   let lastHookError = "";
   const sources = new Map();
+  const RNNOISE_WORKLET_URL = chrome.runtime.getURL("ml/rnnoise-worklet.js");
+  const RNNOISE_WASM_URL = chrome.runtime.getURL("ml/rnnoise.wasm");
   let overlay = null;
   let overlayDragging = false;
   let overlayPendingDrag = false;
@@ -52,6 +58,76 @@
     }
   }
 
+  function getInputNode() {
+    if (rnnoiseEnabled && rnnoiseNode) return rnnoiseNode;
+    return gainNode;
+  }
+
+  function rewireSources() {
+    const inputNode = getInputNode();
+    for (const source of sources.values()) {
+      disconnectSafely(source);
+      try {
+        source.connect(inputNode);
+      } catch (err) {
+        // Ignore reconnect errors.
+      }
+    }
+  }
+
+  function ensureRnnoiseNode() {
+    if (!audioCtx || rnnoiseNode || rnnoiseLoading || !rnnoiseEnabled) return;
+    rnnoiseLoading = audioCtx.audioWorklet
+      .addModule(RNNOISE_WORKLET_URL)
+      .then(() => {
+        rnnoiseNode = new AudioWorkletNode(audioCtx, "rnnoise-processor");
+        rnnoiseNode.port.onmessage = (event) => {
+          const data = event.data || {};
+          if (data.type === "rnnoise-ready") {
+            rnnoiseReady = true;
+            rewireSources();
+          }
+          if (data.type === "rnnoise-error" || data.type === "rnnoise-unsupported") {
+            rnnoiseEnabled = false;
+            rnnoiseReady = false;
+            rnnoiseNode = null;
+            rnnoiseLoading = null;
+            rewireSources();
+          }
+        };
+        rnnoiseNode.port.postMessage({ type: "init", wasmUrl: RNNOISE_WASM_URL });
+        connectGraph();
+        rewireSources();
+        rnnoiseLoading = null;
+      })
+      .catch(() => {
+        rnnoiseEnabled = false;
+        rnnoiseReady = false;
+        rnnoiseNode = null;
+        rnnoiseLoading = null;
+        rewireSources();
+      });
+  }
+
+  function setRnnoiseEnabled(enabled) {
+    rnnoiseEnabled = Boolean(enabled);
+    if (!rnnoiseEnabled) {
+      rnnoiseReady = false;
+      if (rnnoiseNode) {
+        rnnoiseNode.port.postMessage({ type: "enable", enabled: false });
+      }
+      connectGraph();
+      rewireSources();
+      return;
+    }
+    ensureRnnoiseNode();
+    if (rnnoiseNode) {
+      rnnoiseNode.port.postMessage({ type: "enable", enabled: true });
+      connectGraph();
+      rewireSources();
+    }
+  }
+
   function connectGraph() {
     if (!audioCtx || !gainNode) return;
 
@@ -64,6 +140,11 @@
     disconnectSafely(analyser);
     disconnectSafely(measureHighpass);
     disconnectSafely(measureLowpass);
+    disconnectSafely(rnnoiseNode);
+
+    if (rnnoiseEnabled && rnnoiseNode) {
+      rnnoiseNode.connect(gainNode);
+    }
 
     if (clarityEnabled) {
       gainNode.connect(highpass);
@@ -137,6 +218,7 @@
 
       connectGraph();
       startAutoGainLoop();
+      ensureRnnoiseNode();
     }
   }
 
@@ -209,7 +291,7 @@
     ensureAudioGraph();
     try {
       const source = audioCtx.createMediaElementSource(el);
-      source.connect(gainNode);
+      source.connect(getInputNode());
       sources.set(el, source);
       blocked = false;
       lastHookError = "";
@@ -280,6 +362,7 @@
     if (msg.type === "SET_CLARITY") {
       ensureAudioGraph();
       clarityEnabled = Boolean(msg.enabled);
+      setRnnoiseEnabled(clarityEnabled);
       connectGraph();
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
@@ -344,6 +427,7 @@
     boostValue = Number(data.boost) || 1.0;
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
+    setRnnoiseEnabled(clarityEnabled);
     ensureAudioGraph();
     applyGain();
     connectGraph();
