@@ -7,17 +7,26 @@
   let compressor = null;
   let limiter = null;
   let analyser = null;
+  let measureHighpass = null;
+  let measureLowpass = null;
   let meterBuffer = null;
   let autoGainTimer = null;
   let autoGain = 1.0;
   const autoGainConfig = {
     enabled: true,
-    targetRms: 0.1,
+    targetDb: -18.0,
+    outputTrimDb: 0.5,
+    outputTrimGain: Math.pow(10, 0.5 / 20),
     min: 0.6,
-    max: 1.8,
-    rise: 0.18,
-    fall: 0.08,
-    silenceGate: 0.003,
+    max: 2.4,
+    hopMs: 70,
+    attackSec: 0.3,
+    releaseSec: 0.6,
+    maxStep: 0.08,
+    silenceDb: -55,
+    silenceHoldMs: 300,
+    maxUpDbPerUpdate: 0.2,
+    maxDownDbPerUpdate: 0.4,
   };
   let clarityEnabled = false;
   let boostValue = 1.0;
@@ -52,6 +61,8 @@
     disconnectSafely(compressor);
     disconnectSafely(limiter);
     disconnectSafely(analyser);
+    disconnectSafely(measureHighpass);
+    disconnectSafely(measureLowpass);
 
     if (clarityEnabled) {
       gainNode.connect(highpass);
@@ -60,11 +71,13 @@
       presence.connect(compressor);
       compressor.connect(limiter);
       limiter.connect(audioCtx.destination);
-      limiter.connect(analyser);
+      limiter.connect(measureHighpass);
     } else {
       gainNode.connect(audioCtx.destination);
-      gainNode.connect(analyser);
+      gainNode.connect(measureHighpass);
     }
+    measureHighpass.connect(measureLowpass);
+    measureLowpass.connect(analyser);
   }
 
   function ensureAudioGraph() {
@@ -90,22 +103,36 @@
       presence.gain.value = 3.5;
 
       compressor = audioCtx.createDynamicsCompressor();
-      compressor.threshold.value = -22;
-      compressor.knee.value = 18;
-      compressor.ratio.value = 3;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.25;
+      compressor.threshold.value = -28;
+      compressor.knee.value = 24;
+      compressor.ratio.value = 2.2;
+      compressor.attack.value = 0.02;
+      compressor.release.value = 0.4;
 
       limiter = audioCtx.createDynamicsCompressor();
-      limiter.threshold.value = -1;
+      limiter.threshold.value = -6;
       limiter.knee.value = 0;
       limiter.ratio.value = 20;
       limiter.attack.value = 0.003;
-      limiter.release.value = 0.05;
+      limiter.release.value = 0.08;
 
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 1024;
+      const desiredWindowSec = 0.4;
+      let size = 256;
+      const target = Math.max(256, Math.floor(audioCtx.sampleRate * desiredWindowSec));
+      while (size < target) size *= 2;
+      analyser.fftSize = size;
       meterBuffer = new Float32Array(analyser.fftSize);
+
+      measureHighpass = audioCtx.createBiquadFilter();
+      measureHighpass.type = "highpass";
+      measureHighpass.frequency.value = 120;
+      measureHighpass.Q.value = 0.707;
+
+      measureLowpass = audioCtx.createBiquadFilter();
+      measureLowpass.type = "lowpass";
+      measureLowpass.frequency.value = 6000;
+      measureLowpass.Q.value = 0.707;
 
       connectGraph();
       startAutoGainLoop();
@@ -114,12 +141,14 @@
 
   function applyGain() {
     if (!gainNode) return;
-    const finalGain = muted ? 0 : Math.min(boostValue * autoGain, 3.0);
+    const baseGain = muted ? 0 : Math.min(boostValue * autoGain, 2.4);
+    const finalGain = baseGain * autoGainConfig.outputTrimGain;
     gainNode.gain.value = finalGain;
   }
 
   function startAutoGainLoop() {
     if (autoGainTimer) return;
+    let silenceMs = 0;
     autoGainTimer = setInterval(() => {
       if (!autoGainConfig.enabled || !analyser || !meterBuffer) return;
       analyser.getFloatTimeDomainData(meterBuffer);
@@ -130,23 +159,38 @@
         sum += v * v;
       }
       const rms = Math.sqrt(sum / meterBuffer.length);
+      const rmsDb = 20 * Math.log10(rms + 1e-12);
 
-      if (rms < autoGainConfig.silenceGate) {
-        autoGain += (1.0 - autoGain) * autoGainConfig.fall;
-        applyGain();
-        return;
+      if (rmsDb < autoGainConfig.silenceDb) {
+        silenceMs += autoGainConfig.hopMs;
+      } else {
+        silenceMs = 0;
       }
 
-      const desired = Math.min(
-        autoGainConfig.max,
-        Math.max(autoGainConfig.min, autoGainConfig.targetRms / rms)
+      const desiredLinear = Math.pow(10, (autoGainConfig.targetDb - rmsDb) / 20);
+      const desired = Math.min(autoGainConfig.max, Math.max(autoGainConfig.min, desiredLinear));
+
+      const currentDb = 20 * Math.log10(autoGain + 1e-9);
+      const desiredDb = 20 * Math.log10(desired + 1e-9);
+      const diffDb = desiredDb - currentDb;
+      const tau = diffDb > 0 ? autoGainConfig.attackSec : autoGainConfig.releaseSec;
+      const coeff = 1 - Math.exp(-(autoGainConfig.hopMs / 1000) / tau);
+      let deltaDb = diffDb * coeff;
+
+      if (silenceMs >= autoGainConfig.silenceHoldMs && deltaDb > 0) {
+        deltaDb = 0;
+      }
+
+      deltaDb = Math.max(
+        -autoGainConfig.maxDownDbPerUpdate,
+        Math.min(autoGainConfig.maxUpDbPerUpdate, deltaDb)
       );
 
-      const diff = desired - autoGain;
-      const rate = diff > 0 ? autoGainConfig.rise : autoGainConfig.fall;
-      autoGain += diff * rate;
+      const nextDb = currentDb + deltaDb;
+      autoGain = Math.pow(10, nextDb / 20);
+      autoGain = Math.min(autoGainConfig.max, Math.max(autoGainConfig.min, autoGain));
       applyGain();
-    }, 250);
+    }, autoGainConfig.hopMs);
   }
 
   function hookMedia(el) {
