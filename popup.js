@@ -7,6 +7,7 @@ const muteBtn = document.getElementById("mute");
 const sliderWrap = document.getElementById("boost-slider");
 const panel = document.querySelector(".panel");
 let muted = false;
+let clarityEnabled = false;
 
 function updateSliderUI(value) {
   const numeric = Number(value);
@@ -23,10 +24,10 @@ function updateLabel(value) {
   updateSliderUI(numeric);
 }
 
-function setStatus(message) {
+function setStatus(message, state = "error") {
   status.textContent = message || "";
-  if (!panel) return;
-  panel.dataset.status = message === "Applied" ? "applied" : "error";
+  if (!message || !panel) return;
+  panel.dataset.status = state;
 }
 
 function updateMuteUI(isMuted) {
@@ -35,6 +36,13 @@ function updateMuteUI(isMuted) {
   muteBtn.textContent = muted ? "🔇" : "🔊";
   muteBtn.classList.toggle("is-active", muted);
   muteBtn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
+}
+
+function updateClarityUI(enabled) {
+  clarityEnabled = enabled;
+  if (!clarityToggle) return;
+  clarityToggle.classList.toggle("is-active", clarityEnabled);
+  clarityToggle.setAttribute("aria-label", clarityEnabled ? "Speech Focused On" : "Speech Focused Off");
 }
 
 async function getActiveTab() {
@@ -62,7 +70,7 @@ async function loadDefaults() {
   const data = await chrome.storage.local.get({ boost: 1.0, clarity: false, muted: false });
   slider.value = String(data.boost);
   updateLabel(data.boost);
-  clarityToggle.checked = Boolean(data.clarity);
+  updateClarityUI(Boolean(data.clarity));
   updateMuteUI(Boolean(data.muted));
 }
 
@@ -71,9 +79,18 @@ async function loadState() {
   if (state && state.ok) {
     slider.value = String(state.boost ?? 1.0);
     updateLabel(slider.value);
-    clarityToggle.checked = Boolean(state.clarity);
+    updateClarityUI(Boolean(state.clarity));
     updateMuteUI(Boolean(state.muted));
-    setStatus(state.hooked ? "Applied" : "Not hooked");
+    if (state.blocked) {
+      setStatus("Blocked", "error");
+    } else if (state.audioState === "suspended") {
+      setStatus("Click page to enable audio", "error");
+    } else if (!state.hooked) {
+      setStatus("Not hooked", "error");
+    } else {
+      const sources = state.sources ? ` • ${state.sources} source${state.sources === 1 ? "" : "s"}` : "";
+      setStatus(`Applied${sources}`, "applied");
+    }
     return;
   }
   await loadDefaults();
@@ -84,20 +101,20 @@ async function applyBoost(value) {
   updateLabel(numeric);
   await chrome.storage.local.set({ boost: numeric });
   const result = await sendToActiveTab({ type: "SET_BOOST", value: numeric });
-  if (result.ok) setStatus("Applied");
+  if (result.ok) await loadState();
 }
 
 async function applyClarity(enabled) {
   await chrome.storage.local.set({ clarity: Boolean(enabled) });
   const result = await sendToActiveTab({ type: "SET_CLARITY", enabled });
-  if (result.ok) setStatus("Applied");
+  if (result.ok) await loadState();
 }
 
 async function applyMute(nextMuted) {
   updateMuteUI(nextMuted);
   await chrome.storage.local.set({ muted: Boolean(nextMuted) });
   const result = await sendToActiveTab({ type: "SET_MUTE", muted: Boolean(nextMuted) });
-  if (result.ok) setStatus("Applied");
+  if (result.ok) await loadState();
 }
 
 slider.addEventListener("input", (e) => {
@@ -120,8 +137,8 @@ slider.addEventListener("change", (e) => {
   applyBoost(e.target.value);
 });
 
-clarityToggle.addEventListener("change", (e) => {
-  applyClarity(e.target.checked);
+clarityToggle.addEventListener("click", () => {
+  applyClarity(!clarityEnabled);
 });
 
 resetBtn.addEventListener("click", () => {

@@ -6,9 +6,24 @@
   let presence = null;
   let compressor = null;
   let limiter = null;
+  let analyser = null;
+  let meterBuffer = null;
+  let autoGainTimer = null;
+  let autoGain = 1.0;
+  const autoGainConfig = {
+    enabled: true,
+    targetRms: 0.1,
+    min: 0.6,
+    max: 1.8,
+    rise: 0.18,
+    fall: 0.08,
+    silenceGate: 0.003,
+  };
   let clarityEnabled = false;
   let boostValue = 1.0;
   let muted = false;
+  let blocked = false;
+  let lastHookError = "";
   const sources = new Map();
 
   function disconnectSafely(node) {
@@ -28,6 +43,7 @@
     disconnectSafely(presence);
     disconnectSafely(compressor);
     disconnectSafely(limiter);
+    disconnectSafely(analyser);
 
     if (clarityEnabled) {
       gainNode.connect(highpass);
@@ -36,8 +52,10 @@
       presence.connect(compressor);
       compressor.connect(limiter);
       limiter.connect(audioCtx.destination);
+      limiter.connect(analyser);
     } else {
       gainNode.connect(audioCtx.destination);
+      gainNode.connect(analyser);
     }
   }
 
@@ -77,13 +95,50 @@
       limiter.attack.value = 0.003;
       limiter.release.value = 0.05;
 
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      meterBuffer = new Float32Array(analyser.fftSize);
+
       connectGraph();
+      startAutoGainLoop();
     }
   }
 
   function applyGain() {
     if (!gainNode) return;
-    gainNode.gain.value = muted ? 0 : boostValue;
+    const finalGain = muted ? 0 : Math.min(boostValue * autoGain, 3.0);
+    gainNode.gain.value = finalGain;
+  }
+
+  function startAutoGainLoop() {
+    if (autoGainTimer) return;
+    autoGainTimer = setInterval(() => {
+      if (!autoGainConfig.enabled || !analyser || !meterBuffer) return;
+      analyser.getFloatTimeDomainData(meterBuffer);
+
+      let sum = 0;
+      for (let i = 0; i < meterBuffer.length; i += 1) {
+        const v = meterBuffer[i];
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / meterBuffer.length);
+
+      if (rms < autoGainConfig.silenceGate) {
+        autoGain += (1.0 - autoGain) * autoGainConfig.fall;
+        applyGain();
+        return;
+      }
+
+      const desired = Math.min(
+        autoGainConfig.max,
+        Math.max(autoGainConfig.min, autoGainConfig.targetRms / rms)
+      );
+
+      const diff = desired - autoGain;
+      const rate = diff > 0 ? autoGainConfig.rise : autoGainConfig.fall;
+      autoGain += diff * rate;
+      applyGain();
+    }, 250);
   }
 
   function hookMedia(el) {
@@ -93,8 +148,35 @@
       const source = audioCtx.createMediaElementSource(el);
       source.connect(gainNode);
       sources.set(el, source);
+      blocked = false;
+      lastHookError = "";
     } catch (err) {
-      // Likely already connected or not allowed by the browser.
+      if (sources.size === 0) {
+        blocked = true;
+        lastHookError = String(err && err.name ? err.name : err);
+      }
+    }
+  }
+
+  function unhookMedia(el) {
+    const source = sources.get(el);
+    if (!source) return;
+    try {
+      source.disconnect();
+    } catch (err) {
+      // Ignore disconnect errors.
+    }
+    sources.delete(el);
+  }
+
+  function collectMedia(node, collection) {
+    if (!node) return;
+    if (node.tagName === "AUDIO" || node.tagName === "VIDEO") {
+      collection.push(node);
+      return;
+    }
+    if (node.querySelectorAll) {
+      collection.push(...node.querySelectorAll("audio, video"));
     }
   }
 
@@ -103,7 +185,16 @@
     for (const el of media) hookMedia(el);
   }
 
-  const observer = new MutationObserver(() => scan());
+  const observer = new MutationObserver((mutations) => {
+    const added = [];
+    const removed = [];
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => collectMedia(node, added));
+      mutation.removedNodes.forEach((node) => collectMedia(node, removed));
+    }
+    for (const el of added) hookMedia(el);
+    for (const el of removed) unhookMedia(el);
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
   document.addEventListener(
@@ -157,9 +248,22 @@
         clarity: clarityEnabled,
         muted,
         hooked: sources.size > 0,
+        blocked: blocked && sources.size === 0,
+        lastHookError,
+        audioState: audioCtx ? audioCtx.state : "uninitialized",
+        sources: sources.size,
       });
     }
   });
+
+  function resumeAudio() {
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+  }
+
+  window.addEventListener("click", resumeAudio, { capture: true });
+  window.addEventListener("keydown", resumeAudio, { capture: true });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", scan);
