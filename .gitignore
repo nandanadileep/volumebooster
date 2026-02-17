@@ -1,2 +1,4 @@
 .DS_Store
 testing/audio/
+testing/v2_ml/models/
+testing/v2_ml/outputs/
