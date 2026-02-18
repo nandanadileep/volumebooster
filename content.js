@@ -98,7 +98,7 @@
 
   function getInputNode() {
     if (dfn2Enabled && dfn2Ready && dfn2Node) return dfn2Node;
-    if (rnnoiseEnabled && rnnoiseNode) return rnnoiseNode;
+    if (rnnoiseEnabled && rnnoiseReady && rnnoiseNode) return rnnoiseNode;
     return gainNode;
   }
 
@@ -124,6 +124,7 @@
           const data = event.data || {};
           if (data.type === "rnnoise-ready") {
             rnnoiseReady = true;
+            connectGraph();
             rewireSources();
           }
           if (data.type === "rnnoise-error" || data.type === "rnnoise-unsupported") {
@@ -131,6 +132,7 @@
             rnnoiseReady = false;
             rnnoiseNode = null;
             rnnoiseLoading = null;
+            connectGraph();
             rewireSources();
           }
         };
@@ -274,7 +276,7 @@
 
     if (dfn2Enabled && dfn2Ready && dfn2Node) {
       dfn2Node.connect(gainNode);
-    } else if (rnnoiseEnabled && rnnoiseNode) {
+    } else if (rnnoiseEnabled && rnnoiseReady && rnnoiseNode) {
       rnnoiseNode.connect(gainNode);
     }
 
