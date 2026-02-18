@@ -92,6 +92,7 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 - `ml/` — RNNoise WASM + worklet
 - `testing/` — synthetic test harness and metrics
 - `manifest.json` — MV3 config
+- `docs/v2-ml-upgrade.md` — V2 ML upgrade plan and fallback strategy
 
 ## Notes
 - Chromium‑only for now.
