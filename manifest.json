@@ -21,7 +21,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["ml/*"],
+      "resources": ["ml/*", "ml/dfn2/*"],
       "matches": ["<all_urls>"]
     }
   ],

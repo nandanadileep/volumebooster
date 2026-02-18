@@ -141,9 +141,11 @@
 
   function ensureDfn2Node() {
     if (!audioCtx || dfn2Node || dfn2Loading || !dfn2Enabled) return;
+    console.log("[VolumeBoost] DFN2: loading worklet.");
     dfn2Loading = audioCtx.audioWorklet
       .addModule(DFN2_WORKLET_URL)
       .then(() => {
+        console.log("[VolumeBoost] DFN2: worklet loaded, starting worker.");
         dfn2Node = new AudioWorkletNode(audioCtx, "dfn2-processor");
         dfn2Node.port.onmessage = (event) => {
           const data = event.data || {};
@@ -169,9 +171,16 @@
           }
         };
         dfn2Worker = new Worker(DFN2_WORKER_URL);
+        dfn2Worker.onerror = (err) => {
+          console.error("[VolumeBoost] DFN2 worker error.", err);
+        };
+        dfn2Worker.onmessageerror = (err) => {
+          console.error("[VolumeBoost] DFN2 worker message error.", err);
+        };
         const channel = new MessageChannel();
         dfn2Node.port.postMessage({ type: "connect", port: channel.port1 }, [channel.port1]);
         dfn2Worker.postMessage({ type: "connect", port: channel.port2 }, [channel.port2]);
+        console.log("[VolumeBoost] DFN2: initializing ONNX sessions.");
         dfn2Worker.postMessage({
           type: "init",
           modelBaseUrl: DFN2_MODEL_URL,
@@ -181,7 +190,7 @@
         rewireSources();
         dfn2Loading = null;
       })
-      .catch(() => {
+      .catch((err) => {
         dfn2Enabled = false;
         dfn2Ready = false;
         dfn2Node = null;
@@ -191,6 +200,7 @@
         }
         dfn2Loading = null;
         rewireSources();
+        console.error("[VolumeBoost] DFN2 worklet failed to load.", err);
       });
   }
 
