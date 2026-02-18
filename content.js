@@ -68,6 +68,33 @@
     }
   }
 
+  function canUseExtensionApis() {
+    return typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id;
+  }
+
+  function safeStorageGet(defaults, cb) {
+    if (!canUseExtensionApis()) return;
+    try {
+      chrome.storage.local.get(defaults, (data) => {
+        if (chrome.runtime.lastError) return;
+        cb(data);
+      });
+    } catch (err) {
+      // Extension context may have been invalidated.
+    }
+  }
+
+  function safeStorageSet(payload) {
+    if (!canUseExtensionApis()) return;
+    try {
+      chrome.storage.local.set(payload, () => {
+        // Ignore runtime errors when context is gone.
+      });
+    } catch (err) {
+      // Extension context may have been invalidated.
+    }
+  }
+
   function getInputNode() {
     if (dfn2Enabled && dfn2Ready && dfn2Node) return dfn2Node;
     if (rnnoiseEnabled && rnnoiseNode) return rnnoiseNode;
@@ -341,19 +368,19 @@
     boostValue = Math.round(clamped * 10) / 10;
     applyGain();
     updateOverlayControls();
-    chrome.storage.local.set({ boost: boostValue });
+    safeStorageSet({ boost: boostValue });
   }
 
   function toggleMute() {
     muted = !muted;
-    chrome.storage.local.set({ muted });
+    safeStorageSet({ muted });
     applyGain();
     updateOverlayControls();
   }
 
   function toggleClarity() {
     clarityEnabled = !clarityEnabled;
-    chrome.storage.local.set({ clarity: clarityEnabled });
+    safeStorageSet({ clarity: clarityEnabled });
     setRnnoiseEnabled(clarityEnabled);
     setDfn2Enabled(clarityEnabled);
     connectGraph();
@@ -538,7 +565,7 @@
       boostValue = 1.0;
       autoGain = 1.0;
       applyGain();
-      chrome.storage.local.set({ boost: boostValue });
+      safeStorageSet({ boost: boostValue });
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
         audioCtx.resume().catch(() => {});
@@ -596,7 +623,7 @@
     scan();
   }
 
-  chrome.storage.local.get({ boost: 1.0, clarity: true, muted: false }, (data) => {
+  safeStorageGet({ boost: 1.0, clarity: true, muted: false }, (data) => {
     boostValue = Number(data.boost) || 1.0;
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
@@ -876,7 +903,7 @@
     });
 
     overlay.range.addEventListener("change", () => {
-      chrome.storage.local.set({ boost: boostValue });
+      safeStorageSet({ boost: boostValue });
       updateOverlayStatus();
     });
 
@@ -896,7 +923,7 @@
       boostValue = 1.0;
       autoGain = 1.0;
       applyGain();
-      chrome.storage.local.set({ boost: boostValue });
+      safeStorageSet({ boost: boostValue });
       updateOverlayControls();
       overlay.reset.classList.add("is-active");
       if (resetFlashTimer) clearTimeout(resetFlashTimer);
@@ -1022,7 +1049,7 @@
   }
 
   function loadOverlayPosition() {
-    chrome.storage.local.get({ [OVERLAY_POS_KEY]: OVERLAY_DEFAULT_POS }, (data) => {
+    safeStorageGet({ [OVERLAY_POS_KEY]: OVERLAY_DEFAULT_POS }, (data) => {
       const pos = data[OVERLAY_POS_KEY] || OVERLAY_DEFAULT_POS;
       applyOverlayPosition(pos.x, pos.y);
     });
@@ -1032,7 +1059,7 @@
     if (!overlay) return;
     const x = parseInt(overlay.host.style.left || OVERLAY_DEFAULT_POS.x, 10);
     const y = parseInt(overlay.host.style.top || OVERLAY_DEFAULT_POS.y, 10);
-    chrome.storage.local.set({ [OVERLAY_POS_KEY]: { x, y } });
+    safeStorageSet({ [OVERLAY_POS_KEY]: { x, y } });
   }
 
   function clampOverlayToViewport() {
