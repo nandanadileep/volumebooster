@@ -4,7 +4,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 
 ## Features
 - **Per-tab volume boost** with a smooth, low‑pumping auto-gain controller.
-- **Speech Focus (🗣️)** toggle for clarity: RNNoise + EQ/comp/limiter chain. (DeepFilterNet2 ONNX is present but **disabled by default** while we stabilize it.)
+- **Speech Focus (🗣️)** toggle for clarity: EQ/comp/limiter chain for speech focus.
 - **Limiter always engaged** for safe headroom and no clipping.
 - **Draggable overlay** bar that works on any page.
 - **Mute + Reset** controls with persistent settings.
@@ -13,7 +13,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 ## How It Works
 **Audio graph (Speech Focus ON):**
 ```
-MediaElementSource → RNNoise (WASM) → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
+MediaElementSource → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
 ```
 
 **Audio graph (Speech Focus OFF):**
@@ -27,18 +27,8 @@ MediaElementSource → Gain → Limiter → Destination
 - Silence freeze to prevent gain creep during pauses.
 - Output trim for LUFS centering.
 
-**RNNoise ML:**
-- Vendored locally (`ml/`) to comply with MV3 (no remote code).
-- Runs in an AudioWorklet for low‑latency.
-- **Resampling** added so it works at **44.1 kHz or 48 kHz** system output.
-
-**DeepFilterNet2 (ONNX):**
-- Present for R&D but **disabled by default** due to stability/latency concerns.
-- Runs in a **Worker + AudioWorklet** pipeline using `onnxruntime-web` (WASM).
-- Uses **ERB mask** output in the current implementation (deep filtering not yet applied).
-
 ## Current Metrics (Harness)
-From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
+From `testing/run_metrics.py` (DSP chain only):
 - LUFS: **-18.1** (error **-0.1 LU**)
 - dLUFS/sec variance: **1.354**
 - STOI: **0.9655**
@@ -46,25 +36,18 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 - Latency: **4.75 ms**
 - CPU (proc time/sec): **0.0154 s/sec**
 
-> Note: The harness approximates the WebAudio chain with FFmpeg filters and a Python auto‑gain loop. RNNoise (WASM) is not included in those metrics; evaluate ML impact by A/B listening in a noisy video.
+> Note: The harness approximates the WebAudio chain with FFmpeg filters and a Python auto‑gain loop.
 
 ## Manual Testing
 1. Load extension:
    - `chrome://extensions` → Developer mode → Load unpacked → `/Users/nandana/volumeboost`
 2. Open a noisy speech video (YouTube works well).
-3. Toggle **🗣️ Speech Focus** and listen for reduced background noise + clearer voice.
+3. Toggle **🗣️ Speech Focus** and listen for clearer voice.
 4. Adjust boost and verify limiter keeps audio clean.
 
 ## How To Use
 - **Drag** the floating bar anywhere on the page.
-- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain (currently RNNoise).
-- **🔄 Reset** returns boost to 1.0x.
-- **🔇 Mute** toggles audio off/on.
-- Adjust the **slider** for per‑tab volume boost.
-
-## How To Use
-- **Drag** the floating bar anywhere on the page.
-- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain (currently RNNoise).
+- **🗣️ Speech Focus** toggles the clarity EQ/comp chain.
 - **🔄 Reset** returns boost to 1.0x.
 - **🔇 Mute** toggles audio off/on.
 - Adjust the **slider** for per‑tab volume boost.
@@ -76,30 +59,21 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 - Boost Down: `Ctrl+Shift+Down`
 
 ## Challenges & Mitigations
-**1) ML in MV3 (no remote code)**
-- **Challenge:** MV3 disallows loading remote JS/WASM.
-- **Mitigation:** Vendored RNNoise assets into `ml/` and registered via `web_accessible_resources`.
-
-**2) Sample‑rate mismatch (44.1 kHz vs 48 kHz)**
-- **Challenge:** RNNoise expects 48 kHz frames.
-- **Mitigation:** Added linear resampling in the AudioWorklet (upsample → RNNoise → downsample).
-
-**3) Loudness wobble / pumping**
+**1) Loudness wobble / pumping**
 - **Challenge:** Fast gain changes create audible pumping.
 - **Mitigation:** Slower control loop, dB step limiting, silence freeze, and limiter always engaged.
 
-**4) Overlay usability**
+**2) Overlay usability**
 - **Challenge:** Overlay could get clipped on resize.
 - **Mitigation:** Clamp overlay position to viewport on window resize.
 
 ## Project Structure
 - `content.js` — audio graph + overlay UI + messaging
-- `ml/` — RNNoise WASM + DeepFilterNet2 ONNX + ONNX Runtime (WASM)
 - `testing/` — synthetic test harness and metrics
 - `manifest.json` — MV3 config
 - `docs/v2-ml-upgrade.md` — V2 ML upgrade plan and fallback strategy
 
 ## Notes
 - Chromium‑only for now.
-- Speech Focus defaults **ON** (RNNoise).
+- Speech Focus defaults **ON**.
 - Boost capped at **2.4x** for safety.

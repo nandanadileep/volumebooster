@@ -12,15 +12,6 @@
   let meterBuffer = null;
   let autoGainTimer = null;
   let autoGain = 1.0;
-  let rnnoiseNode = null;
-  let rnnoiseEnabled = false;
-  let rnnoiseLoading = null;
-  let rnnoiseReady = false;
-  let dfn2Node = null;
-  let dfn2Worker = null;
-  let dfn2Enabled = false;
-  let dfn2Loading = null;
-  let dfn2Ready = false;
   const autoGainConfig = {
     enabled: true,
     targetDb: -18.0,
@@ -44,13 +35,6 @@
   let blocked = false;
   let lastHookError = "";
   const sources = new Map();
-  const RNNOISE_WORKLET_URL = chrome.runtime.getURL("ml/rnnoise-worklet.js");
-  const RNNOISE_WASM_URL = chrome.runtime.getURL("ml/rnnoise.wasm");
-  const DFN2_ALLOWED = false;
-  const DFN2_WORKLET_URL = chrome.runtime.getURL("ml/dfn2-worklet.js");
-  const DFN2_WORKER_URL = chrome.runtime.getURL("ml/dfn2-worker.js");
-  const DFN2_MODEL_URL = chrome.runtime.getURL("ml/dfn2/");
-  const ORT_WASM_URL = chrome.runtime.getURL("ml/");
   let overlay = null;
   let overlayDragging = false;
   let overlayPendingDrag = false;
@@ -96,169 +80,6 @@
     }
   }
 
-  function getInputNode() {
-    if (dfn2Enabled && dfn2Ready && dfn2Node) return dfn2Node;
-    if (rnnoiseEnabled && rnnoiseReady && rnnoiseNode) return rnnoiseNode;
-    return gainNode;
-  }
-
-  function rewireSources() {
-    const inputNode = getInputNode();
-    for (const source of sources.values()) {
-      disconnectSafely(source);
-      try {
-        source.connect(inputNode);
-      } catch (err) {
-        // Ignore reconnect errors.
-      }
-    }
-  }
-
-  function ensureRnnoiseNode() {
-    if (!audioCtx || rnnoiseNode || rnnoiseLoading || !rnnoiseEnabled) return;
-    rnnoiseLoading = audioCtx.audioWorklet
-      .addModule(RNNOISE_WORKLET_URL)
-      .then(() => {
-        rnnoiseNode = new AudioWorkletNode(audioCtx, "rnnoise-processor");
-        rnnoiseNode.port.onmessage = (event) => {
-          const data = event.data || {};
-          if (data.type === "rnnoise-ready") {
-            rnnoiseReady = true;
-            connectGraph();
-            rewireSources();
-          }
-          if (data.type === "rnnoise-error" || data.type === "rnnoise-unsupported") {
-            rnnoiseEnabled = false;
-            rnnoiseReady = false;
-            rnnoiseNode = null;
-            rnnoiseLoading = null;
-            connectGraph();
-            rewireSources();
-          }
-        };
-        rnnoiseNode.port.postMessage({ type: "init", wasmUrl: RNNOISE_WASM_URL });
-        connectGraph();
-        rewireSources();
-        rnnoiseLoading = null;
-      })
-      .catch(() => {
-        rnnoiseEnabled = false;
-        rnnoiseReady = false;
-        rnnoiseNode = null;
-        rnnoiseLoading = null;
-        rewireSources();
-      });
-  }
-
-  function setRnnoiseEnabled(enabled) {
-    rnnoiseEnabled = Boolean(enabled);
-    if (!rnnoiseEnabled) {
-      rnnoiseReady = false;
-      if (rnnoiseNode) {
-        rnnoiseNode.port.postMessage({ type: "enable", enabled: false });
-      }
-      connectGraph();
-      rewireSources();
-      return;
-    }
-    ensureRnnoiseNode();
-    if (rnnoiseNode) {
-      rnnoiseNode.port.postMessage({ type: "enable", enabled: true });
-      connectGraph();
-      rewireSources();
-    }
-  }
-
-  function ensureDfn2Node() {
-    if (!audioCtx || dfn2Node || dfn2Loading || !dfn2Enabled) return;
-    console.log("[VolumeBoost] DFN2: loading worklet.");
-    dfn2Loading = audioCtx.audioWorklet
-      .addModule(DFN2_WORKLET_URL)
-      .then(() => {
-        console.log("[VolumeBoost] DFN2: worklet loaded, starting worker.");
-        dfn2Node = new AudioWorkletNode(audioCtx, "dfn2-processor");
-        dfn2Node.port.onmessage = (event) => {
-          const data = event.data || {};
-          if (data.type === "dfn2-ready") {
-            dfn2Ready = true;
-            rewireSources();
-            console.log("[VolumeBoost] DeepFilterNet2 active.");
-          }
-          if (data.type === "dfn2-error") {
-            dfn2Enabled = false;
-            dfn2Ready = false;
-            dfn2Node = null;
-            if (dfn2Worker) {
-              dfn2Worker.terminate();
-              dfn2Worker = null;
-            }
-            dfn2Loading = null;
-            rewireSources();
-            console.error(
-              "[VolumeBoost] DeepFilterNet2 failed, falling back to RNNoise.",
-              data.message
-            );
-          }
-        };
-        dfn2Worker = new Worker(DFN2_WORKER_URL);
-        dfn2Worker.onerror = (err) => {
-          console.error("[VolumeBoost] DFN2 worker error.", err);
-        };
-        dfn2Worker.onmessageerror = (err) => {
-          console.error("[VolumeBoost] DFN2 worker message error.", err);
-        };
-        const channel = new MessageChannel();
-        dfn2Node.port.postMessage({ type: "connect", port: channel.port1 }, [channel.port1]);
-        dfn2Worker.postMessage({ type: "connect", port: channel.port2 }, [channel.port2]);
-        console.log("[VolumeBoost] DFN2: initializing ONNX sessions.");
-        dfn2Worker.postMessage({
-          type: "init",
-          modelBaseUrl: DFN2_MODEL_URL,
-          wasmBaseUrl: ORT_WASM_URL,
-        });
-        connectGraph();
-        rewireSources();
-        dfn2Loading = null;
-      })
-      .catch((err) => {
-        dfn2Enabled = false;
-        dfn2Ready = false;
-        dfn2Node = null;
-        if (dfn2Worker) {
-          dfn2Worker.terminate();
-          dfn2Worker = null;
-        }
-        dfn2Loading = null;
-        rewireSources();
-        console.error("[VolumeBoost] DFN2 worklet failed to load.", err);
-      });
-  }
-
-  function setDfn2Enabled(enabled) {
-    if (!DFN2_ALLOWED) {
-      dfn2Enabled = false;
-      return;
-    }
-    dfn2Enabled = Boolean(enabled);
-    if (!dfn2Enabled) {
-      dfn2Ready = false;
-      if (dfn2Node) {
-        dfn2Node.port.postMessage({ type: "enable", enabled: false });
-      }
-      connectGraph();
-      rewireSources();
-      updateOverlayControls();
-      return;
-    }
-    ensureDfn2Node();
-    if (dfn2Node) {
-      dfn2Node.port.postMessage({ type: "enable", enabled: true });
-      connectGraph();
-      rewireSources();
-      updateOverlayControls();
-    }
-  }
-
   function connectGraph() {
     if (!audioCtx || !gainNode) return;
 
@@ -271,14 +92,7 @@
     disconnectSafely(analyser);
     disconnectSafely(measureHighpass);
     disconnectSafely(measureLowpass);
-    disconnectSafely(rnnoiseNode);
-    disconnectSafely(dfn2Node);
-
-    if (dfn2Enabled && dfn2Ready && dfn2Node) {
-      dfn2Node.connect(gainNode);
-    } else if (rnnoiseEnabled && rnnoiseReady && rnnoiseNode) {
-      rnnoiseNode.connect(gainNode);
-    }
+    // No ML nodes in the chain.
 
     if (clarityEnabled) {
       gainNode.connect(highpass);
@@ -351,7 +165,6 @@
 
       connectGraph();
       startAutoGainLoop();
-      ensureRnnoiseNode();
     }
   }
 
@@ -387,7 +200,6 @@
   function toggleClarity() {
     clarityEnabled = !clarityEnabled;
     safeStorageSet({ clarity: clarityEnabled });
-    setRnnoiseEnabled(clarityEnabled);
     connectGraph();
     updateOverlayControls();
   }
@@ -454,7 +266,7 @@
     ensureAudioGraph();
     try {
       const source = audioCtx.createMediaElementSource(el);
-      source.connect(getInputNode());
+      source.connect(gainNode);
       sources.set(el, source);
       blocked = false;
       lastHookError = "";
@@ -525,7 +337,6 @@
     if (msg.type === "SET_CLARITY") {
       ensureAudioGraph();
       clarityEnabled = Boolean(msg.enabled);
-      setRnnoiseEnabled(clarityEnabled);
       connectGraph();
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
@@ -631,7 +442,6 @@
     boostValue = Number(data.boost) || 1.0;
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
-    setRnnoiseEnabled(clarityEnabled);
     ensureAudioGraph();
     applyGain();
     connectGraph();
