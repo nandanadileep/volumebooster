@@ -16,6 +16,11 @@
   let rnnoiseEnabled = false;
   let rnnoiseLoading = null;
   let rnnoiseReady = false;
+  let dfn2Node = null;
+  let dfn2Worker = null;
+  let dfn2Enabled = false;
+  let dfn2Loading = null;
+  let dfn2Ready = false;
   const autoGainConfig = {
     enabled: true,
     targetDb: -18.0,
@@ -41,6 +46,10 @@
   const sources = new Map();
   const RNNOISE_WORKLET_URL = chrome.runtime.getURL("ml/rnnoise-worklet.js");
   const RNNOISE_WASM_URL = chrome.runtime.getURL("ml/rnnoise.wasm");
+  const DFN2_WORKLET_URL = chrome.runtime.getURL("ml/dfn2-worklet.js");
+  const DFN2_WORKER_URL = chrome.runtime.getURL("ml/dfn2-worker.js");
+  const DFN2_MODEL_URL = chrome.runtime.getURL("ml/dfn2/");
+  const ORT_WASM_URL = chrome.runtime.getURL("ml/");
   let overlay = null;
   let overlayDragging = false;
   let overlayPendingDrag = false;
@@ -60,6 +69,7 @@
   }
 
   function getInputNode() {
+    if (dfn2Enabled && dfn2Ready && dfn2Node) return dfn2Node;
     if (rnnoiseEnabled && rnnoiseNode) return rnnoiseNode;
     return gainNode;
   }
@@ -129,6 +139,75 @@
     }
   }
 
+  function ensureDfn2Node() {
+    if (!audioCtx || dfn2Node || dfn2Loading || !dfn2Enabled) return;
+    dfn2Loading = audioCtx.audioWorklet
+      .addModule(DFN2_WORKLET_URL)
+      .then(() => {
+        dfn2Node = new AudioWorkletNode(audioCtx, "dfn2-processor");
+        dfn2Node.port.onmessage = (event) => {
+          const data = event.data || {};
+          if (data.type === "dfn2-ready") {
+            dfn2Ready = true;
+            rewireSources();
+          }
+          if (data.type === "dfn2-error") {
+            dfn2Enabled = false;
+            dfn2Ready = false;
+            dfn2Node = null;
+            if (dfn2Worker) {
+              dfn2Worker.terminate();
+              dfn2Worker = null;
+            }
+            dfn2Loading = null;
+            rewireSources();
+          }
+        };
+        dfn2Worker = new Worker(DFN2_WORKER_URL);
+        const channel = new MessageChannel();
+        dfn2Node.port.postMessage({ type: "connect", port: channel.port1 }, [channel.port1]);
+        dfn2Worker.postMessage({ type: "connect", port: channel.port2 }, [channel.port2]);
+        dfn2Worker.postMessage({
+          type: "init",
+          modelBaseUrl: DFN2_MODEL_URL,
+          wasmBaseUrl: ORT_WASM_URL,
+        });
+        connectGraph();
+        rewireSources();
+        dfn2Loading = null;
+      })
+      .catch(() => {
+        dfn2Enabled = false;
+        dfn2Ready = false;
+        dfn2Node = null;
+        if (dfn2Worker) {
+          dfn2Worker.terminate();
+          dfn2Worker = null;
+        }
+        dfn2Loading = null;
+        rewireSources();
+      });
+  }
+
+  function setDfn2Enabled(enabled) {
+    dfn2Enabled = Boolean(enabled);
+    if (!dfn2Enabled) {
+      dfn2Ready = false;
+      if (dfn2Node) {
+        dfn2Node.port.postMessage({ type: "enable", enabled: false });
+      }
+      connectGraph();
+      rewireSources();
+      return;
+    }
+    ensureDfn2Node();
+    if (dfn2Node) {
+      dfn2Node.port.postMessage({ type: "enable", enabled: true });
+      connectGraph();
+      rewireSources();
+    }
+  }
+
   function connectGraph() {
     if (!audioCtx || !gainNode) return;
 
@@ -142,8 +221,11 @@
     disconnectSafely(measureHighpass);
     disconnectSafely(measureLowpass);
     disconnectSafely(rnnoiseNode);
+    disconnectSafely(dfn2Node);
 
-    if (rnnoiseEnabled && rnnoiseNode) {
+    if (dfn2Enabled && dfn2Ready && dfn2Node) {
+      dfn2Node.connect(gainNode);
+    } else if (rnnoiseEnabled && rnnoiseNode) {
       rnnoiseNode.connect(gainNode);
     }
 
@@ -219,6 +301,7 @@
       connectGraph();
       startAutoGainLoop();
       ensureRnnoiseNode();
+      ensureDfn2Node();
     }
   }
 
@@ -255,6 +338,7 @@
     clarityEnabled = !clarityEnabled;
     chrome.storage.local.set({ clarity: clarityEnabled });
     setRnnoiseEnabled(clarityEnabled);
+    setDfn2Enabled(clarityEnabled);
     connectGraph();
     updateOverlayControls();
   }
@@ -393,6 +477,7 @@
       ensureAudioGraph();
       clarityEnabled = Boolean(msg.enabled);
       setRnnoiseEnabled(clarityEnabled);
+      setDfn2Enabled(clarityEnabled);
       connectGraph();
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
@@ -499,6 +584,7 @@
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
     setRnnoiseEnabled(clarityEnabled);
+    setDfn2Enabled(clarityEnabled);
     ensureAudioGraph();
     applyGain();
     connectGraph();

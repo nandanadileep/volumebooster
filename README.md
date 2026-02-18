@@ -4,7 +4,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 
 ## Features
 - **Per-tab volume boost** with a smooth, low‑pumping auto-gain controller.
-- **Speech Focus (🗣️)** toggle for clarity: RNNoise ML denoise + EQ/comp/limiter chain.
+- **Speech Focus (🗣️)** toggle for clarity: DeepFilterNet2 (ONNX) with RNNoise fallback + EQ/comp/limiter chain.
 - **Limiter always engaged** for safe headroom and no clipping.
 - **Draggable overlay** bar that works on any page.
 - **Mute + Reset** controls with persistent settings.
@@ -13,7 +13,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 ## How It Works
 **Audio graph (Speech Focus ON):**
 ```
-MediaElementSource → RNNoise (WASM, AudioWorklet) → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
+MediaElementSource → DeepFilterNet2 (ONNX, Worker+Worklet) → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
 ```
 
 **Audio graph (Speech Focus OFF):**
@@ -31,6 +31,11 @@ MediaElementSource → RNNoise (OFF) → Gain → Limiter → Destination
 - Vendored locally (`ml/`) to comply with MV3 (no remote code).
 - Runs in an AudioWorklet for low‑latency.
 - **Resampling** added so it works at **44.1 kHz or 48 kHz** system output.
+
+**DeepFilterNet2 (ONNX):**
+- Runs in a **Worker + AudioWorklet** pipeline using `onnxruntime-web` (WASM).
+- Uses **ERB mask** output in the current implementation (deep filtering not yet applied).
+- Falls back to RNNoise if the ONNX pipeline fails to load.
 
 ## Current Metrics (Harness)
 From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
@@ -89,7 +94,7 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 
 ## Project Structure
 - `content.js` — audio graph + overlay UI + messaging
-- `ml/` — RNNoise WASM + worklet
+- `ml/` — RNNoise WASM + DeepFilterNet2 ONNX + ONNX Runtime (WASM)
 - `testing/` — synthetic test harness and metrics
 - `manifest.json` — MV3 config
 - `docs/v2-ml-upgrade.md` — V2 ML upgrade plan and fallback strategy

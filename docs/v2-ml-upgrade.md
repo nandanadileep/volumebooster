@@ -22,6 +22,10 @@ If the ML model cannot load or runs too slow:
 3. Maintain limiter safety regardless of ML state.
 
 ## Next Steps
-1. Add DeepFilterNet2 ONNX assets into `ml/dfn2/`.
-2. Integrate ONNX inference in a worker (WebGPU preferred, WASM fallback).
+1. Add DeepFilterNet2 ONNX assets into `ml/dfn2/`. ✅
+2. Integrate ONNX inference in a worker (WASM). ✅
 3. Run A/B comparisons using `testing/v2_ml/compare_outputs.py`.
+
+## Current Integration Notes
+- Uses **ERB mask only** (deep filtering not yet applied).
+- Runs in a **Worker + AudioWorklet** pipeline with fallback to RNNoise.
