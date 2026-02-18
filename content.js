@@ -150,7 +150,7 @@
           if (data.type === "dfn2-ready") {
             dfn2Ready = true;
             rewireSources();
-            console.info("[VolumeBoost] DeepFilterNet2 active.");
+            console.log("[VolumeBoost] DeepFilterNet2 active.");
           }
           if (data.type === "dfn2-error") {
             dfn2Enabled = false;
@@ -162,7 +162,10 @@
             }
             dfn2Loading = null;
             rewireSources();
-            console.warn("[VolumeBoost] DeepFilterNet2 failed, falling back to RNNoise.", data.message);
+            console.error(
+              "[VolumeBoost] DeepFilterNet2 failed, falling back to RNNoise.",
+              data.message
+            );
           }
         };
         dfn2Worker = new Worker(DFN2_WORKER_URL);
