@@ -46,6 +46,7 @@
   const sources = new Map();
   const RNNOISE_WORKLET_URL = chrome.runtime.getURL("ml/rnnoise-worklet.js");
   const RNNOISE_WASM_URL = chrome.runtime.getURL("ml/rnnoise.wasm");
+  const DFN2_ALLOWED = false;
   const DFN2_WORKLET_URL = chrome.runtime.getURL("ml/dfn2-worklet.js");
   const DFN2_WORKER_URL = chrome.runtime.getURL("ml/dfn2-worker.js");
   const DFN2_MODEL_URL = chrome.runtime.getURL("ml/dfn2/");
@@ -232,6 +233,10 @@
   }
 
   function setDfn2Enabled(enabled) {
+    if (!DFN2_ALLOWED) {
+      dfn2Enabled = false;
+      return;
+    }
     dfn2Enabled = Boolean(enabled);
     if (!dfn2Enabled) {
       dfn2Ready = false;
