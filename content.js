@@ -150,7 +150,7 @@
           if (data.type === "dfn2-ready") {
             dfn2Ready = true;
             rewireSources();
-            updateOverlayControls();
+            console.info("[VolumeBoost] DeepFilterNet2 active.");
           }
           if (data.type === "dfn2-error") {
             dfn2Enabled = false;
@@ -162,7 +162,7 @@
             }
             dfn2Loading = null;
             rewireSources();
-            updateOverlayControls();
+            console.warn("[VolumeBoost] DeepFilterNet2 failed, falling back to RNNoise.", data.message);
           }
         };
         dfn2Worker = new Worker(DFN2_WORKER_URL);
@@ -757,18 +757,6 @@
           gap: 6px;
           margin-left: 6px;
         }
-        .ml-status {
-          margin-left: 6px;
-          font-size: 9px;
-          color: #7f8794;
-          letter-spacing: 0.2px;
-          display: none;
-        }
-        .ml-status.is-active {
-          display: inline-flex;
-          align-items: center;
-          color: #aab4c2;
-        }
         .btn {
           width: 20px;
           height: 20px;
@@ -850,7 +838,6 @@
             <button class="btn" id="vb-clarity" title="Speech Focused">🗣️</button>
             <button class="btn" id="vb-reset" title="Reset">🔄</button>
             <button class="btn" id="vb-mute" title="Mute">🔇</button>
-            <span class="ml-status" id="vb-ml">DFN2 active</span>
           </div>
         </div>
         <div class="status" id="vb-status"></div>
@@ -868,7 +855,6 @@
       clarity: shadow.getElementById("vb-clarity"),
       reset: shadow.getElementById("vb-reset"),
       mute: shadow.getElementById("vb-mute"),
-      mlStatus: shadow.getElementById("vb-ml"),
       status: shadow.getElementById("vb-status"),
     };
 
@@ -979,9 +965,6 @@
     overlay.clarity.classList.toggle("is-active", clarityEnabled);
     overlay.mute.textContent = muted ? "🔇" : "🔊";
     overlay.mute.classList.toggle("is-active", muted);
-    if (overlay.mlStatus) {
-      overlay.mlStatus.classList.toggle("is-active", dfn2Enabled && dfn2Ready);
-    }
   }
 
   function updateOverlayStatus() {
