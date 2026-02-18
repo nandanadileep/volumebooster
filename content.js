@@ -738,7 +738,7 @@
             rgba(124, 88, 255, 0.35) 100%
           );
           background-size: 200% 100%;
-          animation: flowGlow 3s linear infinite;
+          animation: flowGlow 10s linear infinite;
           box-shadow: 0 0 10px rgba(40, 240, 255, 0.55),
             0 0 18px rgba(124, 88, 255, 0.45);
           border-radius: inherit;
@@ -757,7 +757,7 @@
             rgba(255, 255, 255, 0.6),
             transparent
           );
-          animation: flowStreak 2.6s linear infinite;
+          animation: flowStreak 7s linear infinite;
           opacity: 0.6;
           pointer-events: none;
         }
