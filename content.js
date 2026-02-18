@@ -345,7 +345,6 @@
       connectGraph();
       startAutoGainLoop();
       ensureRnnoiseNode();
-      ensureDfn2Node();
     }
   }
 
@@ -382,7 +381,6 @@
     clarityEnabled = !clarityEnabled;
     safeStorageSet({ clarity: clarityEnabled });
     setRnnoiseEnabled(clarityEnabled);
-    setDfn2Enabled(clarityEnabled);
     connectGraph();
     updateOverlayControls();
   }
@@ -521,7 +519,6 @@
       ensureAudioGraph();
       clarityEnabled = Boolean(msg.enabled);
       setRnnoiseEnabled(clarityEnabled);
-      setDfn2Enabled(clarityEnabled);
       connectGraph();
       updateOverlayControls();
       if (audioCtx.state === "suspended") {
@@ -628,7 +625,6 @@
     clarityEnabled = Boolean(data.clarity);
     muted = Boolean(data.muted);
     setRnnoiseEnabled(clarityEnabled);
-    setDfn2Enabled(clarityEnabled);
     ensureAudioGraph();
     applyGain();
     connectGraph();

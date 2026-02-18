@@ -4,7 +4,7 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 
 ## Features
 - **Per-tab volume boost** with a smooth, low‑pumping auto-gain controller.
-- **Speech Focus (🗣️)** toggle for clarity: DeepFilterNet2 (ONNX) with RNNoise fallback + EQ/comp/limiter chain.
+- **Speech Focus (🗣️)** toggle for clarity: RNNoise + EQ/comp/limiter chain. (DeepFilterNet2 ONNX is present but **disabled by default** while we stabilize it.)
 - **Limiter always engaged** for safe headroom and no clipping.
 - **Draggable overlay** bar that works on any page.
 - **Mute + Reset** controls with persistent settings.
@@ -13,12 +13,12 @@ A Chromium-only extension that boosts per-tab audio and adds **speech-focused cl
 ## How It Works
 **Audio graph (Speech Focus ON):**
 ```
-MediaElementSource → DeepFilterNet2 (ONNX, Worker+Worklet) → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
+MediaElementSource → RNNoise (WASM) → Gain → HPF → Low‑shelf → Presence EQ → Compressor → Limiter → Destination
 ```
 
 **Audio graph (Speech Focus OFF):**
 ```
-MediaElementSource → RNNoise (OFF) → Gain → Limiter → Destination
+MediaElementSource → Gain → Limiter → Destination
 ```
 
 **Auto-gain:**
@@ -33,9 +33,9 @@ MediaElementSource → RNNoise (OFF) → Gain → Limiter → Destination
 - **Resampling** added so it works at **44.1 kHz or 48 kHz** system output.
 
 **DeepFilterNet2 (ONNX):**
+- Present for R&D but **disabled by default** due to stability/latency concerns.
 - Runs in a **Worker + AudioWorklet** pipeline using `onnxruntime-web` (WASM).
 - Uses **ERB mask** output in the current implementation (deep filtering not yet applied).
-- Falls back to RNNoise if the ONNX pipeline fails to load.
 
 ## Current Metrics (Harness)
 From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
@@ -57,14 +57,14 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 
 ## How To Use
 - **Drag** the floating bar anywhere on the page.
-- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain.
+- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain (currently RNNoise).
 - **🔄 Reset** returns boost to 1.0x.
 - **🔇 Mute** toggles audio off/on.
 - Adjust the **slider** for per‑tab volume boost.
 
 ## How To Use
 - **Drag** the floating bar anywhere on the page.
-- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain.
+- **🗣️ Speech Focus** toggles ML noise reduction + clarity chain (currently RNNoise).
 - **🔄 Reset** returns boost to 1.0x.
 - **🔇 Mute** toggles audio off/on.
 - Adjust the **slider** for per‑tab volume boost.
@@ -101,5 +101,5 @@ From `testing/run_metrics.py` (DSP chain only; RNNoise not modeled in harness):
 
 ## Notes
 - Chromium‑only for now.
-- Speech Focus defaults **ON**.
+- Speech Focus defaults **ON** (RNNoise).
 - Boost capped at **2.4x** for safety.
